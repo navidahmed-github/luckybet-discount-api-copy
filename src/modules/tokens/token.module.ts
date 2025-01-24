@@ -2,15 +2,16 @@ import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ProviderTokens } from "../../providerTokens";
-import { Token } from "../../entities/token.entity";
+import { Transfer } from "../../entities/transfer.entity";
 import { UserModule } from "../user/user.module";
 import { ContractService } from "../../services/contract.service";
 import { WalletService } from "../../services/wallet.service";
+import { EthereumProviderService } from "../../services/ethereumProvider.service";
 import { TokenService } from "./token.service";
 import { TokenController } from "./token.controller";
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Token]), UserModule],
+    imports: [TypeOrmModule.forFeature([Transfer]), UserModule],
     exports: [ProviderTokens.TokenService],
     controllers: [TokenController],
     providers: [
@@ -24,10 +25,14 @@ import { TokenController } from "./token.controller";
             useClass: WalletService,
         },
         {
+            provide: ProviderTokens.EthereumProviderService,
+            useClass: EthereumProviderService,
+        },
+        {
             provide: ProviderTokens.TokenService,
             useClass: TokenService,
         },
     ]
 })
 
-export class TokenModule { }
+export class TokenModule {}

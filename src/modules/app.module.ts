@@ -1,8 +1,13 @@
 import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { JwtModule } from "@nestjs/jwt";
+import { RolesGuard } from "../auth/roles.guard";
 import { UserModule } from "./user/user.module";
+import { TokenModule } from "./tokens/token.module";
 import { User } from "../entities/user.entity";
+import { Transfer } from "../entities/transfer.entity";
 
 @Module({
 	imports: [
@@ -12,12 +17,24 @@ import { User } from "../entities/user.entity";
 		TypeOrmModule.forRoot({
 			type: "mongodb",
 			url: process.env.MONGO_CONNECTION_STRING,
-			entities: [User],
+			entities: [User, Transfer],
 			retryAttempts: 3,
 			retryDelay: 10000,
+			synchronize: true
 		}),
-		UserModule
+		JwtModule.register({
+			global: true,
+			secret: process.env.JWT_SECRET,
+		}),
+		UserModule,
+		TokenModule
+	],
+	providers: [
+		{
+			provide: APP_GUARD,
+			useClass: RolesGuard,
+		},
 	],
 })
 
-export class AppModule {}
+export class AppModule { }

@@ -1,9 +1,9 @@
 import { NestFactory } from "@nestjs/core";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
-import cookieParser from "cookie-parser";
 import * as dotenv from "dotenv";
 import { AppModule } from "./modules/app.module";
+import { ErrorInterceptor } from "./error.interceptor";
 dotenv.config();
 
 const logger = new Logger("API");
@@ -16,8 +16,7 @@ async function bootstrap() {
   });
 
   app.useGlobalPipes(new ValidationPipe());
-  // !!	app.useGlobalInterceptors(new GenericInterceptor());
-  // !! app.use(cookieParser(process.env.JWT_SECRET));
+  app.useGlobalInterceptors(new ErrorInterceptor());
   app.enableShutdownHooks();
 
   // Enable swagger at "/swagger/" only if it's allowed in this environment

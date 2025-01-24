@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { MongoRepository, Repository } from "typeorm";
+import { MongoRepository } from "typeorm";
 import { Wallet } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { UserNotFoundError } from "../../errors";
+import { UserMissingIdError, UserNotFoundError } from "../../error.types";
 import { IAtomicSequenceService } from "../../services/atomicSequence.service";
 import { User } from "../../entities/user.entity";
 import { IUserService, UserDTO } from "./user.types";
@@ -17,7 +17,7 @@ export class UserService implements IUserService, OnModuleInit {
 		private atomicSequenceService: IAtomicSequenceService,
 
 		@InjectRepository(User)
-		private userRepository: Repository<User>,
+		private userRepository: MongoRepository<User>,
 	) { }
 
 	async onModuleInit() {
@@ -53,6 +53,9 @@ export class UserService implements IUserService, OnModuleInit {
 	}
 
 	async getUserWallet(userId: string): Promise<Wallet> {
+		if (!userId) {
+			throw new UserMissingIdError();
+		}
 		this.logger.verbose(`Retrieving wallet for user with id ${userId}`);
 		const userRecord = await this.getEntityById(userId);
 		if (!userRecord) {

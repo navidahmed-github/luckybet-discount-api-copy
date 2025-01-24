@@ -19,6 +19,13 @@ export abstract class EntityCannotGetError extends Error {
 	}
 }
 
+export abstract class EntityMissingIdError extends Error {
+	constructor(entity: string) {
+		super(`${entity} ID is missing`);
+		this.name = EntityMissingIdError.name;
+	}
+}
+
 export class EntityNotFoundError extends EntityCannotGetError {
 	constructor(entity: string, entityId: string) {
 		super(entity, entityId, `No ${entity} with ID "${entityId}"`);
@@ -31,5 +38,20 @@ export class UserNotFoundError extends EntityNotFoundError {
 	constructor(id: string) {
 		super(EntityNames.User, id);
 		this.name = UserNotFoundError.name;
+	}
+}
+
+export class UserMissingIdError extends EntityMissingIdError {
+	constructor() {
+		super(EntityNames.User);
+		this.name = UserMissingIdError.name;
+	}
+}
+
+//=== Address errors
+export class DestinationInvalidError extends Error {
+	constructor(msg: string) {
+		super(msg);
+		this.name = DestinationInvalidError.name;
 	}
 }
