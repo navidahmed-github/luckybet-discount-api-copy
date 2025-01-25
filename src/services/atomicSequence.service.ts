@@ -26,6 +26,6 @@ export class AtomicSequenceService implements IAtomicSequenceService {
 
 	async getNextSequence(name: string): Promise<number> {
 		const result = await this.runner.findOneAndUpdate(SEQUENCE_TABLE_NAME, { name }, { $inc: { seq: 1 } });
-		return result.value.seq as number;
+		return result.seq as number;
 	}
 }

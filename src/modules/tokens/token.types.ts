@@ -1,6 +1,13 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
 
+export enum TransferType {
+    Send = 'Send',
+    Receive = 'Receive',
+    Mint = 'Mint',
+    Burn = 'Burn'
+}
+
 export class TransferTokenCommand {
     @ApiProperty({
         description: "Identifier of user to transfer token to",
@@ -23,17 +30,24 @@ export class TransferTokenCommand {
 }
 
 export class HistoryDTO {
+    @IsNotEmpty()
     @ApiProperty({
-        description: "Address of wallet token was transferred from - empty for a mint",
-        type: String,
+        description: "The type of transfer",
+        enum: TransferType,
     })
-    from?: string;
+    type: TransferType;
 
     @ApiProperty({
-        description: "Address of wallet token was transferred to - empty for a burn",
+        description: "Address of wallet that token was transferred to/from",
         type: String,
     })
-    to?: string;
+    otherAddress?: string;
+
+    @ApiProperty({
+        description: "Identifier of user that token was transferred to/from",
+        type: String,
+    })
+    otherUser?: string;
 
     @IsNotEmpty()
     @ApiProperty({

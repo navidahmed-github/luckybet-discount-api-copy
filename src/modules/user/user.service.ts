@@ -3,79 +3,76 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { Wallet } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { UserMissingIdError, UserNotFoundError } from "../../error.types";
+import { UserCannotCreateError, UserMissingIdError, UserNotFoundError } from "../../error.types";
+import { IWalletService } from "../../services/wallet.service";
 import { IAtomicSequenceService } from "../../services/atomicSequence.service";
 import { User } from "../../entities/user.entity";
 import { IUserService, UserDTO } from "./user.types";
 
 @Injectable()
 export class UserService implements IUserService, OnModuleInit {
-	private readonly logger = new Logger(UserService.name);
+	private readonly _logger = new Logger(UserService.name);
 
 	constructor(
+		@Inject(ProviderTokens.WalletService)
+		private _walletService: IWalletService,
+
 		@Inject(ProviderTokens.AtomicSequenceService)
-		private atomicSequenceService: IAtomicSequenceService,
+		private _atomicSequenceService: IAtomicSequenceService,
 
 		@InjectRepository(User)
-		private userRepository: MongoRepository<User>,
+		private _userRepository: MongoRepository<User>,
 	) { }
 
-	async onModuleInit() {
-		await this.atomicSequenceService.moduleInit(this.userRepository.metadata.tableName);
-		// For standard test module there is no database so ignore
-		if (this.userRepository instanceof MongoRepository)
-			await (this.userRepository as MongoRepository<User>).createCollectionIndex("userId", { unique: true });
+	public async onModuleInit() {
+		await this._atomicSequenceService.moduleInit(this._userRepository.metadata.tableName);
 	}
 
-	async findAll(): Promise<UserDTO[]> {
-		this.logger.verbose("Retrieving all users");
-		const userRecords = await this.userRepository.find();
-		await this.userRepository.save({
-			userId: "User" + userRecords.length,
-			ordinal: userRecords.length
-		})
-		return userRecords.map(user => UserService.toDTO(user));
+	public async getAll(): Promise<UserDTO[]> {
+		this._logger.verbose("Retrieving all users");
+		const users = await this._userRepository.find();
+		return users.map(User.toDTO);
 	}
 
-	async getEntityById(userId: string): Promise<User | null> {
-		return this.userRepository.findOne({
-			where: { userId },
-		});
+	public async getById(userId: string): Promise<UserDTO> {
+		this._logger.verbose(`Retrieving user: ${userId}`);
+		return this.getEntityById(userId).then(User.toDTO);
 	}
 
-	async getById(userId: string): Promise<UserDTO> {
-		this.logger.verbose(`Retrieving user with id ${userId}`);
-		const userRecord = await this.getEntityById(userId);
-		if (!userRecord) {
-			throw new UserNotFoundError(userId);
+	public async getUserWallet(userId: string): Promise<Wallet> {
+		this._logger.verbose(`Retrieving wallet for user: ${userId}`);
+		const user = await this.getEntityById(userId);
+		const wallet = this._walletService.getWallet(user.ordinal);
+		if (wallet.address != user.address) {
+			throw new Error("Mismatch address"); // !! Use standard error code
 		}
-		return UserService.toDTO(userRecord);
+		return wallet;
 	}
 
-	async getUserWallet(userId: string): Promise<Wallet> {
+	public async create(userId: string): Promise<UserDTO> {
 		if (!userId) {
 			throw new UserMissingIdError();
 		}
-		this.logger.verbose(`Retrieving wallet for user with id ${userId}`);
-		const userRecord = await this.getEntityById(userId);
-		if (!userRecord) {
+		const ordinal = await this._atomicSequenceService.getNextSequence(this._userRepository.metadata.tableName);
+		try {
+			// The unique constraint on index will ensure that only one instance of a user ID can be entered in the database
+			const wallet = this._walletService.getWallet(ordinal);
+			await this._userRepository.save({ userId, ordinal, address: wallet.address });
+			return this.getById(userId);
+		} catch (err) {
+			console.log(err);
+			throw new UserCannotCreateError("A user already exists with this ID");
+		}
+	}
+
+	private async getEntityById(userId: string): Promise<User> {
+		if (!userId) {
+			throw new UserMissingIdError();
+		}
+		const user = this._userRepository.findOne({ where: { userId } });
+		if (!user) {
 			throw new UserNotFoundError(userId);
 		}
-		return null; // !! this.walletService.getWallet(userRecord.ordinal);
-	}
-
-	async create(userId: string, options = { waitOnTransaction: false }): Promise<UserDTO> {
-		const ordinal = await this.atomicSequenceService.getNextSequence(this.userRepository.metadata.tableName);
-
-		await this.userRepository.save({ userId, ordinal })
-
-		return new UserDTO();
-	}
-
-	static toDTO(user: User): UserDTO {
-		return {
-			id: user.userId,
-			address: user.address,
-		};
+		return user;
 	}
 }

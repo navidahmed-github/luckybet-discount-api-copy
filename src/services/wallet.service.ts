@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { HDNodeWallet, Wallet } from "ethers";
+import { HDNodeWallet, Mnemonic, Wallet } from "ethers";
 import { ProviderTokens } from "../providerTokens";
 import { EthereumProviderService } from "./ethereumProvider.service";
 
@@ -31,7 +31,7 @@ export class WalletService implements IWalletService {
 	getWallet(ordinal: number, connect?: boolean): Wallet {
 		const mnemonic = this.config.get(WalletServiceSettingKeys.WALLET_SERVICE_HD_WALLET_MNEMONIC);
 		const path = `m/44'/60'/${ordinal}'/0/0`;
-		const walletNode = HDNodeWallet.fromMnemonic(mnemonic, path);
+		const walletNode = HDNodeWallet.fromMnemonic(Mnemonic.fromPhrase(mnemonic), path);
 		const wallet = new Wallet(walletNode.privateKey);
 		return connect ? this.connect(wallet) : wallet;
 	}

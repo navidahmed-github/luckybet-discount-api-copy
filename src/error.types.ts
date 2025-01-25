@@ -4,6 +4,13 @@ export enum EntityNames {
 }
 
 //=== Abstract Error classes
+export class EntityCannotCreateError extends Error {
+	constructor(entity: string, msg: string) {
+		super(`Cannot create ${entity}: ${msg}`);
+		this.name = EntityCannotCreateError.name;
+	}
+}
+
 export abstract class EntityCannotGetError extends Error {
 	constructor(private entity: string, private entityId: string, msg: string) {
 		super(`Cannot get ${entity} ${entityId}: ${msg}`);
@@ -34,6 +41,13 @@ export class EntityNotFoundError extends EntityCannotGetError {
 }
 
 //=== User errors
+export class UserCannotCreateError extends EntityCannotCreateError {
+	constructor(id: string) {
+		super(EntityNames.User, id);
+		this.name = UserCannotCreateError.name;
+	}
+}
+
 export class UserNotFoundError extends EntityNotFoundError {
 	constructor(id: string) {
 		super(EntityNames.User, id);

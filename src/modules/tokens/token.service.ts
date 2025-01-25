@@ -8,7 +8,7 @@ import { IContractService } from "../../services/contract.service";
 import { IWalletService } from "../../services/wallet.service";
 import { EthereumProviderService } from "../../services/ethereumProvider.service";
 import { IUserService } from "../user/user.types";
-import { HistoryDTO, ITokenService } from "./token.types";
+import { HistoryDTO, ITokenService, TransferType } from "./token.types";
 
 @Injectable()
 export class TokenService implements ITokenService, OnModuleInit, OnModuleDestroy {
@@ -18,19 +18,19 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
 
     constructor(
         @Inject(ProviderTokens.UserService)
-        private userService: IUserService,
+        private _userService: IUserService,
 
         @Inject(ProviderTokens.ContractService)
-        private contractService: IContractService,
+        private _contractService: IContractService,
 
         @Inject(ProviderTokens.WalletService)
-        private walletService: IWalletService,
+        private _walletService: IWalletService,
 
         @Inject(ProviderTokens.EthereumProviderService)
         ethereumProviderService: EthereumProviderService,
 
         @InjectRepository(Transfer)
-        private transferRepository: MongoRepository<Transfer>,
+        private _transferRepository: MongoRepository<Transfer>,
     ) {
         this._provider = ethereumProviderService.getProvider();
     }
@@ -39,8 +39,8 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
         await this.processTransfer(to, amount, from, evt.blockNumber, evt.log.transactionHash);
     }
 
-    async onModuleInit() {
-        this._tokenEvent = await this.contractService.tokenContract();
+    public async onModuleInit() {
+        this._tokenEvent = await this._contractService.tokenContract();
 
         const currentBlock = await this._provider.getBlockNumber();
         const evts = await this._tokenEvent.queryFilter("Transfer", Math.max(currentBlock - 10000, 0), currentBlock);
@@ -52,43 +52,57 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
         this._tokenEvent.on("Transfer", this.transferListener);
     }
 
-    async onModuleDestroy() {
+    public async onModuleDestroy() {
         this._tokenEvent.off("Transfer", this.transferListener);
     }
 
     public async getBalance(userId: string): Promise<bigint> {
-        const wallet = await this.userService.getUserWallet(userId);
-        const token = await this.contractService.tokenContract();
+        const wallet = await this._userService.getUserWallet(userId);
+        const token = await this._contractService.tokenContract();
         return BigInt(await token.balanceOf(wallet.address));
     }
 
     public async getHistory(userId: string): Promise<HistoryDTO[]> {
-        const wallet = await this.userService.getUserWallet(userId);
-        const transfers = await this.transferRepository.find({
+        const wallet = await this._userService.getUserWallet(userId);
+        const transfers = await this._transferRepository.find({
             where: [
                 { offer: { $exists: true } },
                 { $or: [{ from: wallet.address }, { to: wallet.address }] }
             ],
             order: { blockTimestamp: "ASC" }
         });
-        return transfers.map(t => Object.assign(
-            { amount: t.token.amount.toString(), time: t.blockTimestamp },
-            t.from == ZeroAddress ? { from: t.from } : {},
-            t.to == ZeroAddress ? { to: t.to } : {}
-        ));
+        return transfers.map(toHistory);
+
+        function toHistory(transfer: Transfer): HistoryDTO {
+            const common = { amount: transfer.token.amount.toString(), time: transfer.blockTimestamp };
+            if (transfer.to == wallet.address) {
+                if (transfer.from == ZeroAddress) {
+                    return { ...common, type: TransferType.Mint };
+                };
+                // !! need to get user by address
+                return { ...common, type: TransferType.Receive, otherAddress: transfer.from };
+            }
+            if (transfer.from == wallet.address) {
+                if (transfer.to == ZeroAddress) {
+                    return { ...common, type: TransferType.Burn };
+                };
+                return { ...common, type: TransferType.Send, otherAddress: transfer.to };
+            }
+            throw new Error("Invalid transfer"); // !! clean-up
+        }
     }
 
     public async transfer(userId: string, toAddress: string, amount: bigint): Promise<void> {
-        const wallet = await this.userService.getUserWallet(userId);
-        const token = await this.contractService.tokenContract(wallet);
+        const wallet = await this._userService.getUserWallet(userId);
+        const token = await this._contractService.tokenContract(wallet);
         const tx = await token.transfer(toAddress, amount);
         const txReceipt = await tx.wait();
         await this.writeTransfer(wallet.address, toAddress, amount, txReceipt);
     }
 
     public async mint(toAddress: string, amount: bigint): Promise<void> {
-        const admin = this.walletService.getAdminWallet();
-        const token = await this.contractService.tokenContract(admin);
+        const admin = this._walletService.getAdminWallet();
+        const token = await this._contractService.tokenContract(admin);
         const tx = await token.mint(toAddress, amount);
         const txReceipt = await tx.wait();
         await this.writeTransfer(ZeroAddress, toAddress, amount, txReceipt);
@@ -96,9 +110,9 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
 
     private async processTransfer(from, to, amount, blockNumber, txHash) {
         try {
-            if (!await this.transferRepository.findOne({ where: { txHash } })) {
+            if (!await this._transferRepository.findOne({ where: { txHash } })) {
                 const blockTimestamp = (await this._provider.getBlock(blockNumber)).timestamp;
-                await this.transferRepository.save({ from, to, blockNumber, blockTimestamp, txHash, token: { amount } });
+                await this._transferRepository.save({ from, to, blockNumber, blockTimestamp, txHash, token: { amount } });
             }
         } catch (err) {
             console.error(err);
@@ -107,7 +121,7 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
 
     private async writeTransfer(fromAddress: string, toAddress: string, amount: bigint, txReceipt: TransactionReceipt) {
         const blockTimestamp = (await txReceipt.getBlock()).timestamp;
-        return this.transferRepository.save({
+        return this._transferRepository.save({
             fromAddress, toAddress, blockNumber: txReceipt.blockNumber, blockTimestamp, txHash: txReceipt.hash, token: { amount }
         });
     }

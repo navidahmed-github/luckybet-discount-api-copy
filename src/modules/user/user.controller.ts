@@ -1,14 +1,20 @@
 import { Body, Controller, Get, HttpStatus, Inject, Param, Post, Request, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiResponse } from "@nestjs/swagger";
-import { IUserService, UserDTO } from "./user.types";
 import { ProviderTokens } from "../../providerTokens";
+import { Roles } from "../../auth/roles.decorator";
+import { Role } from "../../auth/roles.types";
+import { CreateUserCommand, IUserService, UserDTO } from "./user.types";
 
 @Controller("users")
 @ApiBearerAuth()
 export class UserController {
-	constructor(@Inject(ProviderTokens.UserService) private userService: IUserService) {}
+	constructor(
+		@Inject(ProviderTokens.UserService)
+		private _userService: IUserService
+	) { }
 
-	@Get("all")
+	@Get()
+	@Roles(Role.Admin)
 	@ApiOperation({ summary: "Get all users" })
 	@ApiResponse({
 		status: HttpStatus.OK,
@@ -18,11 +24,12 @@ export class UserController {
 	@ApiResponse({
 		status: HttpStatus.BAD_REQUEST,
 	})
-	async getAll(): Promise<UserDTO[]> {
-		return this.userService.findAll();
+	async all(): Promise<UserDTO[]> {
+		return this._userService.getAll();
 	}
 
 	@Get("me")
+	@Roles(Role.User)
 	@ApiOperation({ summary: "Get current user" })
 	@ApiResponse({
 		status: HttpStatus.OK,
@@ -31,11 +38,12 @@ export class UserController {
 	@ApiResponse({
 		status: HttpStatus.BAD_REQUEST,
 	})
-	async getMe(@Request() req): Promise<UserDTO> {
-		return this.userService.getById(req.user.id);
+	async me(@Request() req): Promise<UserDTO> {
+		return this._userService.getById(req.user.id);
 	}
 
-	@Get("user/:id")
+	@Get(":id")
+	@Roles(Role.Admin)
 	@ApiOperation({ summary: "Get a user" })
 	@ApiResponse({
 		status: HttpStatus.OK,
@@ -44,11 +52,12 @@ export class UserController {
 	@ApiResponse({
 		status: HttpStatus.BAD_REQUEST,
 	})
-	async getById(@Param("id") id: string): Promise<UserDTO> {
-		return this.userService.getById(id);
+	async byId(@Param("id") id: string): Promise<UserDTO> {
+		return this._userService.getById(id);
 	}
 
 	@Post()
+	@Roles(Role.Admin)
 	@ApiOperation({ summary: "Create a user" })
 	@ApiResponse({
 		status: HttpStatus.CREATED,
@@ -57,7 +66,7 @@ export class UserController {
 	@ApiResponse({
 		status: HttpStatus.BAD_REQUEST,
 	})
-	async create(@Body() createUserCommand): Promise<UserDTO> {
-		return this.userService.create(createUserCommand.id);
+	async create(@Body() createUserCommand: CreateUserCommand): Promise<UserDTO> {
+		return this._userService.create(createUserCommand.id);
 	}
 }

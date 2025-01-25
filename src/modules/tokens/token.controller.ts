@@ -12,10 +12,10 @@ import { HistoryDTO, ITokenService, TransferTokenCommand } from "./token.types";
 export class TokenController {
     constructor(
         @Inject(ProviderTokens.TokenService)
-        private tokenService: ITokenService,
+        private _tokenService: ITokenService,
 
         @Inject(ProviderTokens.UserService)
-        private userService: IUserService
+        private _userService: IUserService
     ) { }
 
     @Get("balance/:userId?")
@@ -30,15 +30,12 @@ export class TokenController {
     })
     @ApiParam({
         name: "userId",
-        description: "Identifier of user for which to return balance",
+        description: "Identifier of user for which to return balance (admin role only)",
+        required: false,
         type: String,
     })
     async balance(@Request() req, @Param("userId") userId?: string): Promise<string> {
-        console.log(userId);
-        if (req.user.role != Role.Admin) {
-            userId = req.user.id;
-        }
-        return this.tokenService.getBalance(userId).toString();
+        return this._tokenService.getBalance(req.user.role == Role.Admin ? userId : req.user.id).toString();
     }
 
     @Get("history/:userId?")
@@ -53,14 +50,12 @@ export class TokenController {
     })
     @ApiParam({
         name: "userId",
-        description: "Identifier of user for which to return balance",
+        description: "Identifier of user for which to return history (admin role only)",
+        required: false,
         type: String,
     })
     async history(@Request() req, @Param("userId") userId?: string): Promise<HistoryDTO[]> {
-        if (req.user.role != Role.Admin) {
-            userId = req.user.id;
-        }
-        return this.tokenService.getHistory(userId);
+        return this._tokenService.getHistory(req.user.role == Role.Admin ? userId : req.user.id);
     }
 
     @Post("transfer")
@@ -75,7 +70,7 @@ export class TokenController {
     async transfer(@Request() req, @Body() transferCommand: TransferTokenCommand & { fromUserId?: string }): Promise<void> {
         const userId = ((req.user.role === Role.Admin) && transferCommand.fromUserId) || req.user.id;
         const toAddress = await this.getToAddress(transferCommand);
-        await this.tokenService.transfer(userId, toAddress, BigInt(transferCommand.amount));
+        await this._tokenService.transfer(userId, toAddress, BigInt(transferCommand.amount));
     }
 
     @Post("mint")
@@ -89,14 +84,14 @@ export class TokenController {
     })
     async mint(@Body() mintCommand: TransferTokenCommand): Promise<void> {
         const toAddress = await this.getToAddress(mintCommand);
-        await this.tokenService.mint(toAddress, BigInt(mintCommand.amount));
+        await this._tokenService.mint(toAddress, BigInt(mintCommand.amount));
     }
 
     private async getToAddress(toDetails: { toAddress?: string, toUserId?: string }): Promise<string> {
         if (toDetails.toUserId) {
             if (toDetails.toAddress)
                 throw new DestinationInvalidError("Cannot provide both user and address as destination");
-            const wallet = await this.userService.getUserWallet(toDetails.toUserId);
+            const wallet = await this._userService.getUserWallet(toDetails.toUserId);
             return wallet.address;
         }
         if (!toDetails.toAddress)
