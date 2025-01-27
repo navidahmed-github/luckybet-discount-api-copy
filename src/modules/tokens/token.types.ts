@@ -67,6 +67,6 @@ export class HistoryDTO {
 export interface ITokenService {
     getBalance(userId: string): Promise<bigint>;
     getHistory(userId: string): Promise<HistoryDTO[]>;
-    transfer(userId: string, toAddress: string, amount: bigint): Promise<void>;
+    transfer(userId: string, toAddress: string, amount: bigint, asAdmin: boolean): Promise<void>;
     mint(toAddress: string, amount: bigint): Promise<void>;
 }

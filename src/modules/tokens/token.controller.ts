@@ -35,7 +35,7 @@ export class TokenController {
         type: String,
     })
     async balance(@Request() req, @Param("userId") userId?: string): Promise<string> {
-        return this._tokenService.getBalance(req.user.role == Role.Admin ? userId : req.user.id).toString();
+        return (await this._tokenService.getBalance(req.user.role == Role.Admin ? userId : req.user.id)).toString();
     }
 
     @Get("history/:userId?")
@@ -68,9 +68,10 @@ export class TokenController {
         status: HttpStatus.BAD_REQUEST,
     })
     async transfer(@Request() req, @Body() transferCommand: TransferTokenCommand & { fromUserId?: string }): Promise<void> {
-        const userId = ((req.user.role === Role.Admin) && transferCommand.fromUserId) || req.user.id;
+        const asAdmin = req.user.role === Role.Admin;
+        const userId = (asAdmin && transferCommand.fromUserId) || req.user.id;
         const toAddress = await this.getToAddress(transferCommand);
-        await this._tokenService.transfer(userId, toAddress, BigInt(transferCommand.amount));
+        await this._tokenService.transfer(userId, toAddress, BigInt(transferCommand.amount), asAdmin);
     }
 
     @Post("mint")

@@ -12,7 +12,7 @@ import { HistoryDTO, ITokenService, TransferType } from "./token.types";
 
 @Injectable()
 export class TokenService implements ITokenService, OnModuleInit, OnModuleDestroy {
-    private readonly logger = new Logger(TokenService.name);
+    private readonly _logger = new Logger(TokenService.name);
     private readonly _provider: JsonRpcApiProvider;
     private _tokenEvent: Contract;
 
@@ -35,8 +35,8 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
         this._provider = ethereumProviderService.getProvider();
     }
 
-    transferListener = async (to, amount, from, evt) => {
-        await this.processTransfer(to, amount, from, evt.blockNumber, evt.log.transactionHash);
+    transferListener = async (from, to, value, evt) => {
+        await this.processTransfer(from, to, value, evt.blockNumber, evt.log.transactionHash);
     }
 
     public async onModuleInit() {
@@ -57,50 +57,67 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
     }
 
     public async getBalance(userId: string): Promise<bigint> {
+        this._logger.verbose(`Retrieving balance for user: ${userId}`);
         const wallet = await this._userService.getUserWallet(userId);
         const token = await this._contractService.tokenContract();
-        return BigInt(await token.balanceOf(wallet.address));
+        return token.balanceOf(wallet.address);
     }
 
     public async getHistory(userId: string): Promise<HistoryDTO[]> {
+        this._logger.verbose(`Retrieving history for user: ${userId}`);
         const wallet = await this._userService.getUserWallet(userId);
         const transfers = await this._transferRepository.find({
-            where: [
-                { offer: { $exists: true } },
-                { $or: [{ from: wallet.address }, { to: wallet.address }] }
-            ],
+            where: {
+                $and: [
+                    { token: { $exists: true } },
+                    { $or: [{ fromAddress: wallet.address }, { toAddress: wallet.address }] }
+                ]
+            },
             order: { blockTimestamp: "ASC" }
         });
         return transfers.map(toHistory);
 
         function toHistory(transfer: Transfer): HistoryDTO {
             const common = { amount: transfer.token.amount.toString(), time: transfer.blockTimestamp };
-            if (transfer.to == wallet.address) {
-                if (transfer.from == ZeroAddress) {
+            if (transfer.toAddress == wallet.address) {
+                if (transfer.fromAddress == ZeroAddress) {
                     return { ...common, type: TransferType.Mint };
                 };
                 // !! need to get user by address
-                return { ...common, type: TransferType.Receive, otherAddress: transfer.from };
+                return { ...common, type: TransferType.Receive, otherAddress: transfer.fromAddress };
             }
-            if (transfer.from == wallet.address) {
-                if (transfer.to == ZeroAddress) {
+            if (transfer.fromAddress == wallet.address) {
+                if (transfer.toAddress == ZeroAddress) {
                     return { ...common, type: TransferType.Burn };
                 };
-                return { ...common, type: TransferType.Send, otherAddress: transfer.to };
+                return { ...common, type: TransferType.Send, otherAddress: transfer.toAddress };
             }
             throw new Error("Invalid transfer"); // !! clean-up
         }
     }
 
-    public async transfer(userId: string, toAddress: string, amount: bigint): Promise<void> {
+    public async transfer(userId: string, toAddress: string, amount: bigint, asAdmin: boolean): Promise<void> {
+        this._logger.verbose(`Transfer tokens from user: ${userId} to: ${toAddress} amount: ${amount}`);
         const wallet = await this._userService.getUserWallet(userId);
         const token = await this._contractService.tokenContract(wallet);
-        const tx = await token.transfer(toAddress, amount);
+        let tx;
+
+        await this._walletService.gasWallet(wallet);
+        if (asAdmin) {
+            const adminWallet = this._walletService.getAdminWallet();
+            const txApprove = await token.approve(adminWallet.address, amount);
+            await txApprove.wait();
+            const adminToken = await this._contractService.tokenContract(adminWallet);
+            tx = await adminToken.transferFrom(wallet.address, toAddress, amount);
+        } else {
+            tx = await token.transfer(toAddress, amount);
+        }
         const txReceipt = await tx.wait();
         await this.writeTransfer(wallet.address, toAddress, amount, txReceipt);
     }
 
     public async mint(toAddress: string, amount: bigint): Promise<void> {
+        this._logger.verbose(`Mint tokens to: ${toAddress} amount: ${amount}`);
         const admin = this._walletService.getAdminWallet();
         const token = await this._contractService.tokenContract(admin);
         const tx = await token.mint(toAddress, amount);
@@ -108,11 +125,11 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
         await this.writeTransfer(ZeroAddress, toAddress, amount, txReceipt);
     }
 
-    private async processTransfer(from, to, amount, blockNumber, txHash) {
+    private async processTransfer(fromAddress, toAddress, amount, blockNumber, txHash) {
         try {
             if (!await this._transferRepository.findOne({ where: { txHash } })) {
                 const blockTimestamp = (await this._provider.getBlock(blockNumber)).timestamp;
-                await this._transferRepository.save({ from, to, blockNumber, blockTimestamp, txHash, token: { amount } });
+                await this._transferRepository.save({ fromAddress, toAddress, blockNumber, blockTimestamp, txHash, token: { amount } });
             }
         } catch (err) {
             console.error(err);

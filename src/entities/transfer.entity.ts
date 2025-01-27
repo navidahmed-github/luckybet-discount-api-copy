@@ -18,10 +18,10 @@ export class Transfer {
 	id: ObjectId;
 
 	@Column()
-	from: string;
+	fromAddress: string;
 
 	@Column()
-	to: string;
+	toAddress: string;
 
 	@Column()
 	blockNumber: number;
