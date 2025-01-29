@@ -18,15 +18,18 @@ export class Transfer {
 	id: ObjectId;
 
 	@Column()
+	@Index()
 	fromAddress: string;
 
 	@Column()
+	@Index()
 	toAddress: string;
 
 	@Column()
 	blockNumber: number;
 
 	@Column()
+	@Index()
 	blockTimestamp: number;
 
 	@Column()

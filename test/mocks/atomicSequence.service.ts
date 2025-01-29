@@ -1,6 +1,6 @@
 import { IAtomicSequenceService } from "../../src/services/atomicSequence.service";
 
-export class mockAtomicSequenceService implements IAtomicSequenceService {
+export class MockAtomicSequenceService implements IAtomicSequenceService {
 	private sequences = {};
 
 	async moduleInit(name: string): Promise<void> {

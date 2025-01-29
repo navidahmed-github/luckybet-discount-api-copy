@@ -11,7 +11,7 @@ import {
     NotFoundException
 } from "@nestjs/common";
 import { catchError, Observable } from "rxjs";
-import { EntityMissingIdError, EntityNotFoundError } from "./error.types";
+import { EntityCannotGetError, EntityMissingIdError, EntityNotFoundError } from "./error.types";
 
 @Injectable()
 export class ErrorInterceptor implements NestInterceptor {
@@ -23,7 +23,7 @@ export class ErrorInterceptor implements NestInterceptor {
                 Logger.verbose(`Error caught in ${context.getHandler().name}`);
                 const errorData = { name: err.name, message: err.message, data: err?.data ?? {} };
 
-                if (err instanceof EntityNotFoundError) {
+                if (err instanceof EntityCannotGetError) {
                     throw new NotFoundException(errorData, err.message);
                 }
                 if (err instanceof EntityMissingIdError) {

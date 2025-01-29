@@ -1,9 +1,10 @@
 import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
+import { MongoBulkWriteError } from "mongodb";
 import { Wallet } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { UserCannotCreateError, UserMissingIdError, UserNotFoundError } from "../../error.types";
+import { MONGO_DUPLICATE_KEY, UserAlreadyExistsError, UserCannotCreateError, UserMismatchAddressError, UserMissingIdError, UserNotFoundError } from "../../error.types";
 import { IWalletService } from "../../services/wallet.service";
 import { IAtomicSequenceService } from "../../services/atomicSequence.service";
 import { User } from "../../entities/user.entity";
@@ -44,24 +45,29 @@ export class UserService implements IUserService, OnModuleInit {
 		const user = await this.getEntityById(userId);
 		const wallet = this._walletService.getWallet(user.ordinal);
 		if (wallet.address != user.address) {
-			throw new Error("Mismatch address"); // !! Use standard error code
+			throw new UserMismatchAddressError(`Existing address:${user.address} does not match derived: ${wallet.address} for ${userId}`);
 		}
 		return wallet;
 	}
 
 	public async create(userId: string): Promise<UserDTO> {
+		this._logger.verbose(`Creating user: ${userId}`);
 		if (!userId) {
 			throw new UserMissingIdError();
 		}
+		if (await this._userRepository.findOne({ where: { userId } })) {
+			throw new UserAlreadyExistsError(userId);
+		}
 		const ordinal = await this._atomicSequenceService.getNextSequence(this._userRepository.metadata.tableName);
 		try {
-			// The unique constraint on index will ensure that only one instance of a user ID can be entered in the database
 			const wallet = this._walletService.getWallet(ordinal);
 			await this._userRepository.save({ userId, ordinal, address: wallet.address });
-			return this.getById(userId);
+			return await this.getById(userId);
 		} catch (err) {
-			console.log(err);
-			throw new UserCannotCreateError("A user already exists with this ID");
+			// unique constraint will ensure that race conditions are handled
+			if (err instanceof MongoBulkWriteError && err.code == MONGO_DUPLICATE_KEY)
+				throw new UserAlreadyExistsError(userId);
+			throw new UserCannotCreateError(err.message)
 		}
 	}
 
@@ -69,7 +75,7 @@ export class UserService implements IUserService, OnModuleInit {
 		if (!userId) {
 			throw new UserMissingIdError();
 		}
-		const user = this._userRepository.findOne({ where: { userId } });
+		const user = await this._userRepository.findOne({ where: { userId } });
 		if (!user) {
 			throw new UserNotFoundError(userId);
 		}

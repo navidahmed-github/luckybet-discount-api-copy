@@ -1,3 +1,5 @@
+export const MONGO_DUPLICATE_KEY = 11000;
+
 // String values used in user-facing error messages
 export enum EntityNames {
 	User = "User"
@@ -26,6 +28,13 @@ export abstract class EntityCannotGetError extends Error {
 	}
 }
 
+export class EntityNotFoundError extends EntityCannotGetError {
+	constructor(entity: string, entityId: string) {
+		super(entity, entityId, `No ${entity} with ID: ${entityId}`);
+		this.name = EntityNotFoundError.name;
+	}
+}
+
 export abstract class EntityMissingIdError extends Error {
 	constructor(entity: string) {
 		super(`${entity} ID is missing`);
@@ -33,14 +42,21 @@ export abstract class EntityMissingIdError extends Error {
 	}
 }
 
-export class EntityNotFoundError extends EntityCannotGetError {
+export class EntityAlreadyExistsError extends Error {
 	constructor(entity: string, entityId: string) {
-		super(entity, entityId, `No ${entity} with ID "${entityId}"`);
-		this.name = EntityNotFoundError.name;
+		super(`${entity} ID already exists: ${entityId}`);
+		this.name = EntityAlreadyExistsError.name;
 	}
 }
 
 //=== User errors
+export class UserError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = UserError.name;
+	}
+}
+
 export class UserCannotCreateError extends EntityCannotCreateError {
 	constructor(id: string) {
 		super(EntityNames.User, id);
@@ -59,6 +75,20 @@ export class UserMissingIdError extends EntityMissingIdError {
 	constructor() {
 		super(EntityNames.User);
 		this.name = UserMissingIdError.name;
+	}
+}
+
+export class UserAlreadyExistsError extends EntityAlreadyExistsError {
+	constructor(id: string) {
+		super(EntityNames.User, id);
+		this.name = UserAlreadyExistsError.name;
+	}
+}
+
+export class UserMismatchAddressError extends UserError {
+	constructor(message: string) {
+		super(message);
+		this.name = UserMismatchAddressError.name;
 	}
 }
 
