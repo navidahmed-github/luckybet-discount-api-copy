@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { HDNodeWallet, JsonRpcApiProvider, Mnemonic, parseEther, Wallet } from "ethers";
 import { ProviderTokens } from "../providerTokens";
-import { EthereumProviderService } from "./ethereumProvider.service";
+import { IProviderService } from "./ethereumProvider.service";
 
 export interface IWalletService {
 	connect(wallet: Wallet): Wallet;
@@ -28,7 +28,7 @@ export class WalletService implements IWalletService {
 		private config: ConfigService,
 
 		@Inject(ProviderTokens.EthereumProviderService)
-		ethereumProviderService: EthereumProviderService,
+		ethereumProviderService: IProviderService,
 	) {
 		this._provider = ethereumProviderService.getProvider();
 		this._gasStationWallet = new Wallet(config.get(WalletServiceSettingKeys.GAS_STATION_WALLET_PRIVATE_KEY), this._provider);
@@ -52,11 +52,11 @@ export class WalletService implements IWalletService {
 	}
 
 	public async gasWallet(wallet: Wallet): Promise<void> {
-		this._logger.verbose(`Sending gas to ${wallet.address}`);
+		this._logger.verbose(`Sending gas to: ${wallet.address}`);
 		const amount = parseEther(this.config.get(WalletServiceSettingKeys.WALLET_GAS_AMOUNT));
 		const balance = await this._provider.getBalance(wallet.address);
 		if (balance > amount) {
-			this._logger.verbose(`Gassing not required for ${wallet.address}`);
+			this._logger.verbose(`Gassing not required for: ${wallet.address}`);
 			return;
 		}
 		await this.sendEther(wallet.address, amount);

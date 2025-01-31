@@ -5,7 +5,7 @@ import { DestinationInvalidError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { IUserService } from "../user/user.types";
-import { HistoryDTO, ITokenService, TransferTokenCommand } from "./token.types";
+import { TokenHistoryDTO, ITokenService, TransferTokenCommand } from "./token.types";
 
 @Controller("tokens")
 @ApiBearerAuth()
@@ -54,7 +54,7 @@ export class TokenController {
         required: false,
         type: String,
     })
-    async history(@Request() req, @Param("userId") userId?: string): Promise<HistoryDTO[]> {
+    async history(@Request() req, @Param("userId") userId?: string): Promise<TokenHistoryDTO[]> {
         return this._tokenService.getHistory(req.user.role == Role.Admin ? userId : req.user.id);
     }
 

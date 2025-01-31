@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Contract, InterfaceAbi, Wallet } from "ethers";
 import { ProviderTokens } from "../providerTokens";
-import { EthereumProviderService, Deployment } from "./ethereumProvider.service";
+import { Deployment, IProviderService } from "./ethereumProvider.service";
 
 export interface IContractService {
     tokenContract(wallet?: Wallet): Promise<Contract>;
@@ -23,7 +23,7 @@ export class ContractService implements IContractService {
         private config: ConfigService,
 
         @Inject(ProviderTokens.EthereumProviderService)
-        private ethereumProviderService: EthereumProviderService,
+        private ethereumProviderService: IProviderService,
     ) {
         this._deployment = this.ethereumProviderService.getDeployment();
     }

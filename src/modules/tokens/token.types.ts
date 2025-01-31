@@ -1,12 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
-
-export enum TransferType {
-    Send = 'Send',
-    Receive = 'Receive',
-    Mint = 'Mint',
-    Burn = 'Burn'
-}
+import { TransferType } from "../../common.types";
 
 export class TransferTokenCommand {
     @ApiProperty({
@@ -29,7 +23,7 @@ export class TransferTokenCommand {
     amount: string;
 }
 
-export class HistoryDTO {
+export class TokenHistoryDTO {
     @IsNotEmpty()
     @ApiProperty({
         description: "The type of transfer",
@@ -66,7 +60,7 @@ export class HistoryDTO {
 
 export interface ITokenService {
     getBalance(userId: string): Promise<bigint>;
-    getHistory(userId: string): Promise<HistoryDTO[]>;
+    getHistory(userId: string): Promise<TokenHistoryDTO[]>;
     transfer(userId: string, toAddress: string, amount: bigint, asAdmin: boolean): Promise<void>;
     mint(toAddress: string, amount: bigint): Promise<void>;
 }

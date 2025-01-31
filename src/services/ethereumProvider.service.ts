@@ -5,6 +5,7 @@ import * as deployment from "../../artifacts";
 
 export interface IProviderService {
 	getProvider(): JsonRpcProvider;
+	getDeployment(): Deployment;
 }
 
 export enum EthereumProviderServiceSettingKeys {

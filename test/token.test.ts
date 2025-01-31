@@ -2,17 +2,20 @@ import { ConfigService } from "@nestjs/config";
 import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { ProviderTokens } from "../src/providerTokens";
-import { UserAlreadyExistsError, UserNotFoundError } from "../src/error.types";
+import { Transfer } from "../src/entities/transfer.entity";
 import { User } from "../src/entities/user.entity";
 import { UserService } from "../src/modules/user/user.service";
+import { TokenService } from "../src/modules/tokens/token.service";
 import { WalletService, WalletServiceSettingKeys } from "../src/services/wallet.service";
-import { EthereumProviderService } from "../src/services/ethereumProvider.service";
+import { MockContractService } from "./mocks/contract.service";
+import { MockProviderService } from "./mocks/ethereumProvider.service";
 import { MockAtomicSequenceService } from "./mocks/atomicSequence.service";
-import { makeMockUserRepository } from "./mocks/respositories";
+import { makeMockTransferRepository, makeMockUserRepository } from "./mocks/respositories";
+import { ZeroAddress } from "ethers";
 
 let testModule: TestingModule;
 
-describe("Users", () => {
+describe("Tokens", () => {
     beforeEach(async () => {
         testModule = await Test.createTestingModule({
             providers: [
@@ -34,12 +37,16 @@ describe("Users", () => {
                     },
                 },
                 {
+                    provide: ProviderTokens.ContractService,
+                    useClass: MockContractService,
+                },
+                {
                     provide: ProviderTokens.WalletService,
                     useClass: WalletService,
                 },
                 {
                     provide: ProviderTokens.EthereumProviderService,
-                    useClass: EthereumProviderService,
+                    useClass: MockProviderService,
                 },
                 {
                     provide: ProviderTokens.AtomicSequenceService,
@@ -50,8 +57,16 @@ describe("Users", () => {
                     useClass: UserService,
                 },
                 {
+                    provide: ProviderTokens.TokenService,
+                    useClass: TokenService,
+                },
+                {
                     provide: getRepositoryToken(User),
                     useValue: makeMockUserRepository(),
+                },
+                {
+                    provide: getRepositoryToken(Transfer),
+                    useValue: makeMockTransferRepository(),
                 },
             ],
         }).compile();
@@ -62,29 +77,23 @@ describe("Users", () => {
         await testModule?.close();
     });
 
-    it("Should create user and wallet", async () => {
+    it("Should mint tokens", async () => {
         const userService = testModule.get<UserService>(ProviderTokens.UserService);
-        for (var i = 1; i <= 3; i++)
-            await userService.create(`test-user${i}`);
+        const tokenService = testModule.get<TokenService>(ProviderTokens.TokenService);
+        const transferRepository = testModule.get(getRepositoryToken(Transfer));
 
-        const users = await userService.getAll();
-        expect(users.length).toBe(3);
-        expect(users[0].id).toBe("test-user1");
-        expect(users[0].address).toBe("0x116B002A2593b9DD5a424ED81004A8F21BD6eEcd");
-        expect(users[1].id).toBe("test-user2");
-        expect(users[2].id).toBe("test-user3");
+        const usernames = Array.from({ length: 3 }, (_, i) => `test-user${i}`);
+        const users = await Promise.all(usernames.map(async u => userService.create(u)));
 
-        expect(await userService.getById("test-user3")).toEqual(users[2]);
-        await expect(userService.getById("test-user4")).rejects.toThrow(UserNotFoundError);
+        await tokenService.mint(users[0].address, 500n);
+        await tokenService.mint(users[1].address, 300n);
+        await tokenService.mint(users[0].address, 400n);
 
-        const wallet = await userService.getUserWallet("test-user1");
-        expect(wallet.address).toBe("0x116B002A2593b9DD5a424ED81004A8F21BD6eEcd");
-    });
-
-    it("Should not be able to create duplicate users", async () => {
-        const userService = testModule.get<UserService>(ProviderTokens.UserService);
-
-        await userService.create("test-user1");
-        await expect(userService.create("test-user1")).rejects.toThrow(UserAlreadyExistsError);
+        const balances = await Promise.all(usernames.map(async u => tokenService.getBalance(u)));
+        expect(balances.map(b => b.toString())).toEqual(["900", "300", "0"]);
+        expect(transferRepository.save).toHaveBeenCalledTimes(3);
+        expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(
+            { fromAddress: ZeroAddress, toAddress: users[0].address, token: { amount: 400n } }
+        ));
     });
 });

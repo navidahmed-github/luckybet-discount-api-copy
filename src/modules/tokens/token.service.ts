@@ -4,14 +4,15 @@ import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
 import { Contract, JsonRpcApiProvider, Log, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
+import { TransferType } from "../../common.types";
 import { MONGO_DUPLICATE_KEY } from "../../error.types";
 import { Transfer } from "../../entities/transfer.entity";
 import { User } from "../../entities/user.entity";
 import { IContractService } from "../../services/contract.service";
 import { IWalletService } from "../../services/wallet.service";
-import { EthereumProviderService } from "../../services/ethereumProvider.service";
+import { IProviderService } from "../../services/ethereumProvider.service";
 import { IUserService } from "../user/user.types";
-import { HistoryDTO, ITokenService, TransferType } from "./token.types";
+import { TokenHistoryDTO, ITokenService } from "./token.types";
 
 @Injectable()
 export class TokenService implements ITokenService, OnModuleInit, OnModuleDestroy {
@@ -31,7 +32,7 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
         private _walletService: IWalletService,
 
         @Inject(ProviderTokens.EthereumProviderService)
-        ethereumProviderService: EthereumProviderService,
+        ethereumProviderService: IProviderService,
 
         @InjectRepository(Transfer)
         private _transferRepository: MongoRepository<Transfer>,
@@ -63,8 +64,8 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
         return await token.balanceOf(wallet.address);
     }
 
-    public async getHistory(userId: string): Promise<HistoryDTO[]> {
-        this._logger.verbose(`Retrieving history for user: ${userId}`);
+    public async getHistory(userId: string): Promise<TokenHistoryDTO[]> {
+        this._logger.verbose(`Retrieving token history for user: ${userId}`);
         const wallet = await this._userService.getUserWallet(userId);
         const lookupPipeline = (prefix: string) => {
             return {
@@ -91,7 +92,7 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
         ]);
         return (await transfers.toArray()).map(toHistory).filter(Boolean);
 
-        function toHistory(transfer: Transfer & { fromUser: User[], toUser: User[] }): HistoryDTO | null {
+        function toHistory(transfer: Transfer & { fromUser: User[], toUser: User[] }): TokenHistoryDTO | null {
             let dto = null;
             if (transfer.toAddress == wallet.address) {
                 const otherUser = transfer.fromUser.length ? { otherUser: transfer.fromUser[0].userId } : {};
