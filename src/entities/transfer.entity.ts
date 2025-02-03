@@ -3,13 +3,16 @@ import { Column, CreateDateColumn, Entity, Index, ObjectId, ObjectIdColumn, Uniq
 @Entity()
 export class TokenTransfer {
 	@Column()
-	amount: bigint;
+	amount: string; // can't store bigint in MongoDB natively
 }
 
 @Entity()
 export class OfferTransfer {
 	@Column()
 	tokenId: string;
+
+	@Column()
+	additionalInfo?: string;
 }
 
 @Entity("transfers")
@@ -37,10 +40,10 @@ export class Transfer {
 	txHash: string;
 
 	@Column(() => TokenTransfer)
-	token: TokenTransfer;
+	token?: TokenTransfer;
 
 	@Column(() => OfferTransfer)
-	offer: OfferTransfer;
+	offer?: OfferTransfer;
 
 	@Column()
 	@CreateDateColumn()
@@ -50,3 +53,5 @@ export class Transfer {
 	@UpdateDateColumn()
 	updatedAt: Date;
 }
+
+export type RawTransfer = Omit<Transfer, "id" | "blockTimestamp" | "createdAt" | "updatedAt">;

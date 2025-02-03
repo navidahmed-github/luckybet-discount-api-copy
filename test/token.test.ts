@@ -85,15 +85,15 @@ describe("Tokens", () => {
         const usernames = Array.from({ length: 3 }, (_, i) => `test-user${i}`);
         const users = await Promise.all(usernames.map(async u => userService.create(u)));
 
-        await tokenService.mint(users[0].address, 500n);
-        await tokenService.mint(users[1].address, 300n);
-        await tokenService.mint(users[0].address, 400n);
+        await tokenService.create(users[0].address, 500n);
+        await tokenService.create(users[1].address, 300n);
+        await tokenService.create(users[0].address, 400n);
 
         const balances = await Promise.all(usernames.map(async u => tokenService.getBalance(u)));
         expect(balances.map(b => b.toString())).toEqual(["900", "300", "0"]);
         expect(transferRepository.save).toHaveBeenCalledTimes(3);
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(
-            { fromAddress: ZeroAddress, toAddress: users[0].address, token: { amount: 400n } }
+            { fromAddress: ZeroAddress, toAddress: users[0].address, token: { amount: "400" } }
         ));
     });
 });

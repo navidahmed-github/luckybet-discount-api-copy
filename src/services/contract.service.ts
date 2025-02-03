@@ -35,13 +35,13 @@ export class ContractService implements IContractService {
     }
 
     public async stakeContract(address: string, wallet?: Wallet): Promise<Contract> {
-        const { abi } = this._deployment.Token;
+        const { abi } = this._deployment.Stake;
         return this.getContract(address, abi, wallet);
     }
 
     public async offerContract(wallet?: Wallet): Promise<Contract> {
         const address = this.config.get(ContractServiceSettingKeys.OFFER_CONTRACT_ADDRESS);
-        const { abi } = this._deployment.Token;
+        const { abi } = this._deployment.Offer;
         return this.getContract(address, abi, wallet);
     }
 

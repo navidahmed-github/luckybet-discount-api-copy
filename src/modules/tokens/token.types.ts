@@ -1,8 +1,9 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
 import { TransferType } from "../../common.types";
+import { RawTransfer, Transfer } from "../../entities/transfer.entity";
 
-export class TransferTokenCommand {
+export class CreateTokenCommand {
     @ApiProperty({
         description: "Identifier of user to transfer token to",
         type: String,
@@ -21,6 +22,14 @@ export class TransferTokenCommand {
         type: String,
     })
     amount: string;
+}
+
+export class TransferTokenCommand extends CreateTokenCommand {
+    @ApiProperty({
+        description: "Identifier of user to transfer token from",
+        type: String,
+    })
+    fromUserId?: string;
 }
 
 export class TokenHistoryDTO {
@@ -61,6 +70,6 @@ export class TokenHistoryDTO {
 export interface ITokenService {
     getBalance(userId: string): Promise<bigint>;
     getHistory(userId: string): Promise<TokenHistoryDTO[]>;
-    transfer(userId: string, toAddress: string, amount: bigint, asAdmin: boolean): Promise<void>;
-    mint(toAddress: string, amount: bigint): Promise<void>;
+    create(toAddress: string, amount: bigint): Promise<RawTransfer>;
+    transfer(userId: string, toAddress: string, amount: bigint, asAdmin: boolean): Promise<RawTransfer>;
 }

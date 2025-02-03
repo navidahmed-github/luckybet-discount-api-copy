@@ -92,6 +92,21 @@ export class UserMismatchAddressError extends UserError {
 	}
 }
 
+//=== Offer errors
+export class OfferError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = OfferError.name;
+	}
+}
+
+export class OfferTokenIdError extends OfferError {
+	constructor(message: string) {
+		super(message);
+		this.name = OfferTokenIdError.name;
+	}	
+}
+
 //=== Address errors
 export class DestinationInvalidError extends Error {
 	constructor(msg: string) {

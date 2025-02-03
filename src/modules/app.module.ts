@@ -6,6 +6,7 @@ import { JwtModule } from "@nestjs/jwt";
 import { RolesGuard } from "../auth/roles.guard";
 import { UserModule } from "./user/user.module";
 import { TokenModule } from "./tokens/token.module";
+import { OfferModule } from "./offers/offer.module";
 import { User } from "../entities/user.entity";
 import { Transfer } from "../entities/transfer.entity";
 
@@ -27,7 +28,8 @@ import { Transfer } from "../entities/transfer.entity";
 			secret: process.env.JWT_SECRET,
 		}),
 		UserModule,
-		TokenModule
+		TokenModule,
+		OfferModule
 	],
 	providers: [
 		{

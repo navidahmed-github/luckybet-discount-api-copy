@@ -1,26 +1,26 @@
-import { Body, Controller, Get, HttpStatus, Inject, Param, Post, Request } from "@nestjs/common";
+import { Body, Controller, Get, HttpStatus, Inject, Param, Post, Request, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse } from "@nestjs/swagger";
 import { ProviderTokens } from "../../providerTokens";
 import { DestinationInvalidError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { IUserService } from "../user/user.types";
-import { CreateTokenCommand, TokenHistoryDTO, ITokenService, TransferTokenCommand  } from "./token.types";
+import { CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand } from "./offer.types";
 
-@Controller("tokens")
+@Controller("offers")
 @ApiBearerAuth()
-export class TokenController {
+export class OfferController {
     constructor(
-        @Inject(ProviderTokens.TokenService)
-        private _tokenService: ITokenService,
+        @Inject(ProviderTokens.OfferService)
+        private _offerService: IOfferService,
 
         @Inject(ProviderTokens.UserService)
         private _userService: IUserService
     ) { }
 
-    @Get("balance/:userId?")
+    @Get("owned/:userId?")
     @Roles(Role.Admin, Role.User)
-    @ApiOperation({ summary: "Get balance for user" })
+    @ApiOperation({ summary: "Get offers owned for user" })
     @ApiResponse({
         status: HttpStatus.OK,
         type: String,
@@ -30,12 +30,12 @@ export class TokenController {
     })
     @ApiParam({
         name: "userId",
-        description: "Identifier of user for which to return balance (admin role only)",
+        description: "Identifier of user for which to return offer (admin role only)",
         required: false,
         type: String,
     })
-    async balance(@Request() req, @Param("userId") userId?: string): Promise<string> {
-        return (await this._tokenService.getBalance(req.user.role == Role.Admin ? userId : req.user.id)).toString();
+    async owned(@Request() req, @Param("userId") userId?: string): Promise<string[]> {
+        return this._offerService.getOffers(req.user.role == Role.Admin ? userId : req.user.id);
     }
 
     @Get("history/:userId?")
@@ -54,38 +54,38 @@ export class TokenController {
         required: false,
         type: String,
     })
-    async history(@Request() req, @Param("userId") userId?: string): Promise<TokenHistoryDTO[]> {
-        return this._tokenService.getHistory(req.user.role == Role.Admin ? userId : req.user.id);
+    async history(@Request() req, @Param("userId") userId?: string): Promise<OfferHistoryDTO[]> {
+        return this._offerService.getHistory(req.user.role == Role.Admin ? userId : req.user.id);
     }
 
     @Post()
     @Roles(Role.Admin)
-    @ApiOperation({ summary: "Allocate tokens to a user" })
+    @ApiOperation({ summary: "Create an offer" })
     @ApiResponse({
         status: HttpStatus.CREATED,
     })
     @ApiResponse({
         status: HttpStatus.BAD_REQUEST,
     })
-    async create(@Body() createCommand: CreateTokenCommand): Promise<void> {
+    async create(@Body() createCommand: CreateOfferCommand): Promise<void> {
         const toAddress = await this.getToAddress(createCommand);
-        await this._tokenService.create(toAddress, BigInt(createCommand.amount));
+        await this._offerService.create(toAddress, createCommand.offerType, BigInt(createCommand.amount), createCommand.additionalInfo);
     }
 
     @Post("transfer")
     @Roles(Role.Admin, Role.User)
-    @ApiOperation({ summary: "Transfer tokens to another user" })
+    @ApiOperation({ summary: "Transfer offers to another user" })
     @ApiResponse({
         status: HttpStatus.OK,
     })
     @ApiResponse({
         status: HttpStatus.BAD_REQUEST,
     })
-    async transfer(@Request() req, @Body() transferCommand: TransferTokenCommand): Promise<void> {
+    async transfer(@Request() req, @Body() transferCommand: TransferOfferCommand): Promise<void> {
         const asAdmin = req.user.role === Role.Admin;
         const userId = (asAdmin && transferCommand.fromUserId) || req.user.id;
         const toAddress = await this.getToAddress(transferCommand);
-        await this._tokenService.transfer(userId, toAddress, BigInt(transferCommand.amount), asAdmin);
+        await this._offerService.transfer(userId, toAddress, BigInt(transferCommand.tokenId), asAdmin);
     }
 
     private async getToAddress(toDetails: { toAddress?: string, toUserId?: string }): Promise<string> {
