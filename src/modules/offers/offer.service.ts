@@ -1,13 +1,15 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, StreamableFile } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
 import { Contract, EventLog, id, JsonRpcApiProvider, Log, TransactionReceipt, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { TransferType } from "../../common.types";
+import { MimeType, TransferType } from "../../common.types";
 import { MONGO_DUPLICATE_KEY, OfferTokenIdError } from "../../error.types";
 import { RawTransfer, Transfer } from "../../entities/transfer.entity";
 import { User } from "../../entities/user.entity";
+import { Metadata, Template } from "../../entities/template.entity";
+import { OfferImage } from "../../entities/image.entity";
 import { IContractService } from "../../services/contract.service";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
@@ -41,11 +43,17 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
         @Inject(ProviderTokens.EthereumProviderService)
         ethereumProviderService: IProviderService,
 
+        @InjectRepository(User)
+        userRepository: MongoRepository<User>,
+
         @InjectRepository(Transfer)
         private _transferRepository: MongoRepository<Transfer>,
 
-        @InjectRepository(User)
-        userRepository: MongoRepository<User>,
+        @InjectRepository(Template)
+        private _templateRepository: MongoRepository<Template>,
+
+        @InjectRepository(OfferImage)
+        private _imageRepository: MongoRepository<OfferImage>,
     ) {
         this._userTableName = userRepository.metadata.tableName;
         this._provider = ethereumProviderService.getProvider();
@@ -63,6 +71,14 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
 
     public async onModuleDestroy() {
         this._offerEvent?.off("Transfer", this.transferListener);
+    }
+
+    public async getMetadata(offerType: number, offerInstance: number): Promise<Metadata> {
+        return (await this.get(this._templateRepository, offerType, offerInstance))?.metadata;
+    }
+
+    public async getImage(offerType: number, offerInstance: number): Promise<OfferImage> {
+        return this.get(this._imageRepository, offerType, offerInstance);
     }
 
     public async getOffers(userId: string): Promise<string[]> {
@@ -166,6 +182,31 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
             const txReceipt = await tx.wait();
             return this.saveTransfer(wallet.address, toAddress, tokenId, txReceipt.blockNumber, txReceipt.hash);
         });
+    }
+
+    public async createTemplate(offerType: number, metadata: Metadata, offerInstance?: number): Promise<void> {
+        this._logger.verbose(`Create template for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
+        const id = (await this.get(this._templateRepository, offerType, offerInstance))?.id;
+        await this._templateRepository.save({ ...(id && { id }), offerType, metadata, ...(offerInstance && { offerInstance }) });
+    }
+
+    public async uploadImage(offerType: number, format: MimeType, data: Buffer, offerInstance?: number): Promise<void> {
+        this._logger.verbose(`Upload ${format} for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
+        const id = (await this.get(this._imageRepository, offerType, offerInstance))?.id;
+        await this._imageRepository.save({ ...(id && { id }), offerType, format, data, ...(offerInstance && { offerInstance }) });
+    }
+
+    public async deleteImage(offerType: number, offerInstance?: number): Promise<void> {
+        this._logger.verbose(`Delete image for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
+        const existing = await this.get(this._imageRepository, offerType, offerInstance);
+        if (existing) {
+            await this._imageRepository.delete(existing.id);
+        }
+    }
+
+    private async get<T>(repository: MongoRepository<T>, offerType: number, offerInstance?: number): Promise<T> {
+        return (await repository.findOne({ where: { offerType, offerInstance } })) ??
+            (await repository.findOne({ where: { offerType, offerInstance: undefined } }));
     }
 
     private transferListener = async (from: string, to: string, tokenId: bigint, { log }: { log: Log }) => {

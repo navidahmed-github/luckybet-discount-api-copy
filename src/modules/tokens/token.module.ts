@@ -12,7 +12,7 @@ import { TokenService } from "./token.service";
 import { TokenController } from "./token.controller";
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Transfer, User]), UserModule],
+    imports: [TypeOrmModule.forFeature([User, Transfer]), UserModule],
     exports: [ProviderTokens.TokenService],
     controllers: [TokenController],
     providers: [

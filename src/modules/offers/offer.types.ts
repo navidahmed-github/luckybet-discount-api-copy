@@ -1,7 +1,9 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
-import { TransferType } from "../../common.types";
+import { MimeType, TransferType } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
+import { Metadata } from "../../entities/template.entity";
+import { OfferImage } from "../../entities/image.entity";
 
 export class CreateOfferCommand {
     @ApiProperty({
@@ -19,7 +21,7 @@ export class CreateOfferCommand {
     @IsNotEmpty()
     @ApiProperty({
         description: "Offer type to generate",
-        type: String,
+        type: Number,
     })
     offerType: number;
 
@@ -35,6 +37,14 @@ export class CreateOfferCommand {
         type: String,
     })
     additionalInfo?: string;
+}
+
+export class CreateTemplateCommand {
+    name: string;
+
+    description: string;
+
+    attributes: object;
 }
 
 export class TransferOfferCommand {
@@ -100,8 +110,13 @@ export class OfferHistoryDTO {
 }
 
 export interface IOfferService {
+    getMetadata(offerType: number, offerInstance: number): Promise<Metadata>;
+    getImage(offerType: number, offerInstance: number): Promise<OfferImage>;
     getOffers(userId: string): Promise<string[]>;
     getHistory(userId: string): Promise<OfferHistoryDTO[]>;
     create(toAddress: string, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransfer>;
     transfer(userId: string, toAddress: string, tokenId: bigint, asAdmin: boolean): Promise<RawTransfer>;
+    createTemplate(offerType: number, metdata: Metadata, offerInstance?: number): Promise<void>;
+    uploadImage(offerType: number, format: MimeType, data: Buffer, offerInstance?: number): Promise<void>;
+    deleteImage(offerType: number, offerInstance?: number): Promise<void>;
 }

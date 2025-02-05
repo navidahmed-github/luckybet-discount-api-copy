@@ -67,9 +67,9 @@ export class TokenController {
     @ApiResponse({
         status: HttpStatus.BAD_REQUEST,
     })
-    async create(@Body() createCommand: CreateTokenCommand): Promise<void> {
-        const toAddress = await this.getToAddress(createCommand);
-        await this._tokenService.create(toAddress, BigInt(createCommand.amount));
+    async create(@Body() cmd: CreateTokenCommand): Promise<void> {
+        const toAddress = await this.getToAddress(cmd);
+        await this._tokenService.create(toAddress, BigInt(cmd.amount));
     }
 
     @Post("transfer")
@@ -81,11 +81,11 @@ export class TokenController {
     @ApiResponse({
         status: HttpStatus.BAD_REQUEST,
     })
-    async transfer(@Request() req, @Body() transferCommand: TransferTokenCommand): Promise<void> {
+    async transfer(@Request() req, @Body() cmd: TransferTokenCommand): Promise<void> {
         const asAdmin = req.user.role === Role.Admin;
-        const userId = (asAdmin && transferCommand.fromUserId) || req.user.id;
-        const toAddress = await this.getToAddress(transferCommand);
-        await this._tokenService.transfer(userId, toAddress, BigInt(transferCommand.amount), asAdmin);
+        const userId = (asAdmin && cmd.fromUserId) || req.user.id;
+        const toAddress = await this.getToAddress(cmd);
+        await this._tokenService.transfer(userId, toAddress, BigInt(cmd.amount), asAdmin);
     }
 
     private async getToAddress(toDetails: { toAddress?: string, toUserId?: string }): Promise<string> {

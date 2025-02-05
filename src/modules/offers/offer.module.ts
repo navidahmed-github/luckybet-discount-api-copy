@@ -3,6 +3,8 @@ import { ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { ProviderTokens } from "../../providerTokens";
 import { Transfer } from "../../entities/transfer.entity";
+import { Template } from "../../entities/template.entity";
+import { OfferImage } from "../../entities/image.entity";
 import { User } from "../../entities/user.entity";
 import { UserModule } from "../user/user.module";
 import { ContractService } from "../../services/contract.service";
@@ -13,7 +15,7 @@ import { OfferService } from "./offer.service";
 import { OfferController } from "./offer.controller";
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Transfer, User]), UserModule],
+    imports: [TypeOrmModule.forFeature([User, Transfer, Template, OfferImage]), UserModule],
     exports: [ProviderTokens.OfferService],
     controllers: [OfferController],
     providers: [

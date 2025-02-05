@@ -9,6 +9,8 @@ import { TokenModule } from "./tokens/token.module";
 import { OfferModule } from "./offers/offer.module";
 import { User } from "../entities/user.entity";
 import { Transfer } from "../entities/transfer.entity";
+import { Template } from "../entities/template.entity";
+import { OfferImage } from "../entities/image.entity";
 
 @Module({
 	imports: [
@@ -18,7 +20,7 @@ import { Transfer } from "../entities/transfer.entity";
 		TypeOrmModule.forRoot({
 			type: "mongodb",
 			url: process.env.MONGO_CONNECTION_STRING,
-			entities: [User, Transfer],
+			entities: [User, Transfer, Template, OfferImage],
 			retryAttempts: 3,
 			retryDelay: 10000,
 			synchronize: true

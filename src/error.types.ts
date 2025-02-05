@@ -2,7 +2,8 @@ export const MONGO_DUPLICATE_KEY = 11000;
 
 // String values used in user-facing error messages
 export enum EntityNames {
-	User = "User"
+	User = "User",
+	Offer = "Offer"
 }
 
 //=== Abstract Error classes
@@ -97,6 +98,13 @@ export class OfferError extends Error {
 	constructor(message: string) {
 		super(message);
 		this.name = OfferError.name;
+	}
+}
+
+export class OfferNotFoundError extends EntityNotFoundError {
+	constructor(id: string) {
+		super(EntityNames.Offer, id);
+		this.name = OfferNotFoundError.name;
 	}
 }
 

@@ -4,3 +4,9 @@ export enum TransferType {
     Mint = 'Mint',
     Burn = 'Burn'
 }
+
+export enum MimeType {
+    GIF = 'image/gif',
+    JPG = 'image/jpeg',
+    PNG = 'image/png'
+}
