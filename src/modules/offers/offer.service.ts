@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, StreamableFile } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
@@ -73,12 +73,13 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
         this._offerEvent?.off("Transfer", this.transferListener);
     }
 
-    public async getMetadata(offerType: number, offerInstance: number): Promise<Metadata> {
-        return (await this.get(this._templateRepository, offerType, offerInstance))?.metadata;
+    public async getMetadata(offerType: number, offerInstance: number, detailed?: boolean): Promise<Metadata> {
+        const [template, overriden] = await this.getWithFallback(this._templateRepository, offerType, offerInstance);
+        return template?.metadata ? { ...template.metadata, ...(detailed && { usesDefault: !overriden }) } : null;
     }
 
     public async getImage(offerType: number, offerInstance: number): Promise<OfferImage> {
-        return this.get(this._imageRepository, offerType, offerInstance);
+        return (await this.getWithFallback(this._imageRepository, offerType, offerInstance))[0];
     }
 
     public async getOffers(userId: string): Promise<string[]> {
@@ -186,27 +187,35 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
 
     public async createTemplate(offerType: number, metadata: Metadata, offerInstance?: number): Promise<void> {
         this._logger.verbose(`Create template for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
-        const id = (await this.get(this._templateRepository, offerType, offerInstance))?.id;
+        const id = (await this._templateRepository.findOne({ where: { offerType, offerInstance } }))?.id;
         await this._templateRepository.save({ ...(id && { id }), offerType, metadata, ...(offerInstance && { offerInstance }) });
+    }
+
+    public async deleteTemplate(offerType: number, offerInstance?: number): Promise<void> {
+        this._logger.verbose(`Delete template for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
+        const existing = await this._templateRepository.findOne({ where: { offerType, offerInstance } });
+        if (existing) {
+            await this._templateRepository.delete(existing.id);
+        }
     }
 
     public async uploadImage(offerType: number, format: MimeType, data: Buffer, offerInstance?: number): Promise<void> {
         this._logger.verbose(`Upload ${format} for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
-        const id = (await this.get(this._imageRepository, offerType, offerInstance))?.id;
+        const id = (await this._imageRepository.findOne({ where: { offerType, offerInstance } }))?.id;
         await this._imageRepository.save({ ...(id && { id }), offerType, format, data, ...(offerInstance && { offerInstance }) });
     }
 
     public async deleteImage(offerType: number, offerInstance?: number): Promise<void> {
         this._logger.verbose(`Delete image for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
-        const existing = await this.get(this._imageRepository, offerType, offerInstance);
+        const existing = await this._imageRepository.findOne({ where: { offerType, offerInstance } });
         if (existing) {
             await this._imageRepository.delete(existing.id);
         }
     }
 
-    private async get<T>(repository: MongoRepository<T>, offerType: number, offerInstance?: number): Promise<T> {
-        return (await repository.findOne({ where: { offerType, offerInstance } })) ??
-            (await repository.findOne({ where: { offerType, offerInstance: undefined } }));
+    private async getWithFallback<T>(repository: MongoRepository<T>, offerType: number, offerInstance: number): Promise<[T, boolean]> {
+        const overriden = await repository.findOne({ where: { offerType, offerInstance } });
+        return overriden ? [overriden, true] : [await repository.findOne({ where: { offerType, offerInstance: undefined } }), false];
     }
 
     private transferListener = async (from: string, to: string, tokenId: bigint, { log }: { log: Log }) => {

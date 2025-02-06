@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Header, HttpStatus, Inject, Param, ParseIntPipe, Post, Put, RawBodyRequest, Req, Request, Res, StreamableFile, UnsupportedMediaTypeException, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Header, HttpStatus, Inject, Param, ParseIntPipe, Post, Put, Query, Request, Res, StreamableFile, UnsupportedMediaTypeException, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse } from "@nestjs/swagger";
+import { createReadStream } from "fs";
 import { ProviderTokens } from "../../providerTokens";
 import { MimeType } from "../../common.types";
 import { DestinationInvalidError, OfferNotFoundError, OfferTokenIdError } from "../../error.types";
@@ -8,6 +9,9 @@ import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { IUserService } from "../user/user.types";
 import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand } from "./offer.types";
+
+const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
+const DEFAULT_IMAGE_TYPE = MimeType.PNG;
 
 @Controller("offers")
 @ApiBearerAuth()
@@ -22,6 +26,16 @@ export class OfferController {
 
     @Get(":tokenId")
     @ApiOperation({ summary: "Get metadata associated with token identifier" })
+    @ApiParam({
+        name: "tokenId",
+        description: "Identifier of offer for which to return metadata",
+        required: true,
+        type: String,
+    })
+    @ApiQuery({
+        name: "detailed",
+        required: false
+    })
     @ApiResponse({
         status: HttpStatus.OK,
         type: String,
@@ -29,25 +43,18 @@ export class OfferController {
     @ApiResponse({
         status: HttpStatus.BAD_REQUEST,
     })
-    @ApiParam({
-        name: "tokenId",
-        description: "Identifier of offer for which to return metadata",
-        required: true,
-        type: String,
-    })
-    async metadata(@Param("tokenId") tokenId: string): Promise<any> {
-        if (tokenId.endsWith(".json") && tokenId.length == 69) {
-            const offerType = Number.parseInt(tokenId.slice(0, 32));
-            const offerInstance = Number.parseInt(tokenId.slice(32, 64));
-            if (!Number.isNaN(offerType) && !Number.isNaN(offerInstance)) {
-                const metadata = await this._offerService.getMetadata(offerType, offerInstance);
-                if (!metadata) {
-                    throw new OfferNotFoundError(tokenId);
-                }
-                return metadata;
-            }
+    async metadata(@Param("tokenId") tokenId: string, @Query("detailed") detailed?: boolean): Promise<any> {
+        const [offerType, offerInstance] = this.parseTokenId(tokenId);
+        const metadata = await this._offerService.getMetadata(offerType, offerInstance, detailed);
+        if (!metadata) {
+            throw new OfferNotFoundError(tokenId);
         }
-        throw new OfferTokenIdError("Invalid format for token identifier");
+        if (!tokenId.endsWith(".json") || tokenId.length != 69) {
+            throw new OfferTokenIdError("Invalid format for token identifier");
+        }
+        const image = await this._offerService.getImage(offerType, offerInstance);
+        const imagePath = image ? tokenId.replace("json", this.getImageSuffix(image.format)) : DEFAULT_IMAGE_NAME;
+        return { ...metadata, image: process.env.SERVER_URL + "/offers/image/" + imagePath };
     }
 
     @Get("image/:tokenId")
@@ -67,19 +74,20 @@ export class OfferController {
     })
     @Header('Content-Disposition', 'inline')
     async img(@Param("tokenId") tokenId: string, @Res({ passthrough: true }) res) {
-        if (tokenId.length > 64) {
-            const offerType = Number.parseInt(tokenId.slice(0, 32));
-            const offerInstance = Number.parseInt(tokenId.slice(32, 64));
-            const image = await this._offerService.getImage(offerType, offerInstance);
-            if (!image) {
-                throw new OfferNotFoundError(tokenId);
-            }
-            if (tokenId.endsWith(this.getImageSuffix(image.format))) {
-                res.contentType(image.format);
-                return new StreamableFile(Buffer.from(image.data.toString('hex'), 'hex'));
-            }
+        if (tokenId === DEFAULT_IMAGE_NAME) {
+            res.contentType(DEFAULT_IMAGE_TYPE);
+            return new StreamableFile(createReadStream(`assets/${DEFAULT_IMAGE_NAME}`));
         }
-        throw new OfferTokenIdError("Invalid format for token identifier");
+        const [offerType, offerInstance] = this.parseTokenId(tokenId);
+        const image = await this._offerService.getImage(offerType, offerInstance);
+        if (!image) {
+            throw new OfferNotFoundError(tokenId);
+        }
+        if (!tokenId.endsWith(this.getImageSuffix(image.format))) {
+            throw new OfferTokenIdError("Invalid format for token identifier");
+        }
+        res.contentType(image.format);
+        return new StreamableFile(Buffer.from(image.data.toString('hex'), 'hex'));
     }
 
     @Get("owned/:userId?")
@@ -136,7 +144,23 @@ export class OfferController {
         await this._offerService.create(toAddress, cmd.offerType, BigInt(cmd.amount), cmd.additionalInfo);
     }
 
-    @Post("template/:offerType/:offerInstance?")
+    @Post("transfer")
+    @Roles(Role.Admin, Role.User)
+    @ApiOperation({ summary: "Transfer offers to another user" })
+    @ApiResponse({
+        status: HttpStatus.OK,
+    })
+    @ApiResponse({
+        status: HttpStatus.BAD_REQUEST,
+    })
+    async transfer(@Request() req, @Body() cmd: TransferOfferCommand): Promise<void> {
+        const asAdmin = req.user.role === Role.Admin;
+        const userId = (asAdmin && cmd.fromUserId) || req.user.id;
+        const toAddress = await this.getToAddress(cmd);
+        await this._offerService.transfer(userId, toAddress, BigInt(cmd.tokenId), asAdmin);
+    }
+
+    @Put("template/:offerType/:offerInstance?")
     @Roles(Role.Admin)
     @ApiOperation({ summary: "Create template for an offer type" })
     @ApiResponse({
@@ -151,6 +175,16 @@ export class OfferController {
         @Param("offerInstance", new ParseIntPipe({ optional: true })) offerInstance?: number
     ): Promise<void> {
         await this._offerService.createTemplate(offerType, { ...cmd }, offerInstance);
+    }
+
+    @Delete("template/:offerType/:offerInstance?")
+    // !!    @Roles(Role.Admin)
+    @ApiOperation({ summary: "Delete template for an offer type" })
+    async deleteTemplate(
+        @Param("offerType", new ParseIntPipe()) offerType: number,
+        @Param("offerInstance", new ParseIntPipe({ optional: true })) offerInstance?: number
+    ): Promise<void> {
+        await this._offerService.deleteTemplate(offerType, offerInstance);
     }
 
     @Put("image/:offerType/:offerInstance?")
@@ -178,33 +212,11 @@ export class OfferController {
     @Delete("image/:offerType/:offerInstance?")
     // !!    @Roles(Role.Admin)
     @ApiOperation({ summary: "Delete image for an offer type" })
-    @ApiResponse({
-        status: HttpStatus.CREATED,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-    })
     async deleteImage(
         @Param("offerType", new ParseIntPipe()) offerType: number,
         @Param("offerInstance", new ParseIntPipe({ optional: true })) offerInstance?: number
     ): Promise<void> {
         await this._offerService.deleteImage(offerType, offerInstance);
-    }
-
-    @Post("transfer")
-    @Roles(Role.Admin, Role.User)
-    @ApiOperation({ summary: "Transfer offers to another user" })
-    @ApiResponse({
-        status: HttpStatus.OK,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-    })
-    async transfer(@Request() req, @Body() cmd: TransferOfferCommand): Promise<void> {
-        const asAdmin = req.user.role === Role.Admin;
-        const userId = (asAdmin && cmd.fromUserId) || req.user.id;
-        const toAddress = await this.getToAddress(cmd);
-        await this._offerService.transfer(userId, toAddress, BigInt(cmd.tokenId), asAdmin);
     }
 
     private async getToAddress(toDetails: { toAddress?: string, toUserId?: string }): Promise<string> {
@@ -217,6 +229,17 @@ export class OfferController {
         if (!toDetails.toAddress)
             throw new DestinationInvalidError("No destination provided");
         return toDetails.toAddress;
+    }
+
+    private parseTokenId(tokenId: string): [number, number] {
+        if (tokenId.length > 64) {
+            const offerType = Number.parseInt(tokenId.slice(0, 32));
+            const offerInstance = Number.parseInt(tokenId.slice(32, 64));
+            if (!Number.isNaN(offerType) && !Number.isNaN(offerInstance)) {
+                return [offerType, offerInstance];
+            }
+        }
+        throw new OfferTokenIdError("Invalid format for token identifier");
     }
 
     private getImageSuffix(format: MimeType): string {

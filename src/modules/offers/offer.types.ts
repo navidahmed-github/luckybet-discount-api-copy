@@ -40,8 +40,18 @@ export class CreateOfferCommand {
 }
 
 export class CreateTemplateCommand {
+    @IsNotEmpty()
+    @ApiProperty({
+        description: "Name of offer",
+        type: String,
+    })
     name: string;
 
+    @IsNotEmpty()
+    @ApiProperty({
+        description: "Description of offer",
+        type: String,
+    })
     description: string;
 
     attributes: object;
@@ -110,13 +120,14 @@ export class OfferHistoryDTO {
 }
 
 export interface IOfferService {
-    getMetadata(offerType: number, offerInstance: number): Promise<Metadata>;
+    getMetadata(offerType: number, offerInstance: number, detailed?: boolean): Promise<Metadata>;
     getImage(offerType: number, offerInstance: number): Promise<OfferImage>;
     getOffers(userId: string): Promise<string[]>;
     getHistory(userId: string): Promise<OfferHistoryDTO[]>;
     create(toAddress: string, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransfer>;
     transfer(userId: string, toAddress: string, tokenId: bigint, asAdmin: boolean): Promise<RawTransfer>;
     createTemplate(offerType: number, metdata: Metadata, offerInstance?: number): Promise<void>;
+    deleteTemplate(offerType: number, offerInstance?: number): Promise<void>;
     uploadImage(offerType: number, format: MimeType, data: Buffer, offerInstance?: number): Promise<void>;
     deleteImage(offerType: number, offerInstance?: number): Promise<void>;
 }
