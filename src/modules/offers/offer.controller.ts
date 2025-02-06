@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Header, HttpStatus, Inject, Param, ParseIntPipe, Post, Put, Query, Request, Res, StreamableFile, UnsupportedMediaTypeException, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, ForbiddenException, Get, Header, HttpCode, HttpStatus, Inject, Param, ParseIntPipe, Post, Put, Query, Request, Res, StreamableFile, UnauthorizedException, UnsupportedMediaTypeException, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiForbiddenResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiUnsupportedMediaTypeResponse } from "@nestjs/swagger";
 import { createReadStream } from "fs";
 import { ProviderTokens } from "../../providerTokens";
 import { MimeType } from "../../common.types";
@@ -12,6 +12,34 @@ import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryD
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
+
+const ApiParamUserId = (description: string, required: boolean = false) => ApiParam({
+    name: "userId",
+    description,
+    required,
+    type: String,
+})
+
+const ApiParamTokenId = (description: string) => ApiParam({
+    name: "tokenId",
+    description,
+    required: true,
+    type: String,
+})
+
+const ApiParamOfferType = () => ApiParam({
+    name: "offerType",
+    description: "Type of offer",
+    required: true,
+    type: Number,
+});
+
+const ApiParamOfferInstance = () => ApiParam({
+    name: "offerInstance",
+    description: "Instance of offer",
+    required: false,
+    type: Number,
+});
 
 @Controller("offers")
 @ApiBearerAuth()
@@ -26,23 +54,13 @@ export class OfferController {
 
     @Get(":tokenId")
     @ApiOperation({ summary: "Get metadata associated with token identifier" })
-    @ApiParam({
-        name: "tokenId",
-        description: "Identifier of offer for which to return metadata",
-        required: true,
-        type: String,
-    })
+    @ApiParamTokenId("Identifier of offer for which to return metadata")
     @ApiQuery({
         name: "detailed",
+        description: "Indicates whether to return additional information about token",
         required: false
     })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        type: String,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-    })
+    @ApiOkResponse({ description: "The metadata was returned successfully" })
     async metadata(@Param("tokenId") tokenId: string, @Query("detailed") detailed?: boolean): Promise<any> {
         const [offerType, offerInstance] = this.parseTokenId(tokenId);
         const metadata = await this._offerService.getMetadata(offerType, offerInstance, detailed);
@@ -59,19 +77,8 @@ export class OfferController {
 
     @Get("image/:tokenId")
     @ApiOperation({ summary: "Get image associated with token identifier" })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        type: String,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-    })
-    @ApiParam({
-        name: "tokenId",
-        description: "Identifier of offer for which to return image",
-        required: true,
-        type: String,
-    })
+    @ApiParamTokenId("Identifier of offer for which to return image")
+    @ApiOkResponse({ description: "The image was returned successfully" })
     @Header('Content-Disposition', 'inline')
     async img(@Param("tokenId") tokenId: string, @Res({ passthrough: true }) res) {
         if (tokenId === DEFAULT_IMAGE_NAME) {
@@ -93,53 +100,28 @@ export class OfferController {
     @Get("owned/:userId?")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Get offers owned for user" })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        type: String,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-    })
-    @ApiParam({
-        name: "userId",
-        description: "Identifier of user for which to return offer (admin role only)",
-        required: false,
-        type: String,
-    })
+    @ApiParamUserId("Identifier of user for which to return offer (admin role only)")
+    @ApiOkResponse({ description: "The offers were returned successfully" })
     async owned(@Request() req, @Param("userId") userId?: string): Promise<string[]> {
-        return this._offerService.getOffers(req.user.role == Role.Admin ? userId : req.user.id);
+        return this._offerService.getOffers(req.user.role === Role.Admin ? userId : req.user.id);
     }
 
     @Get("history/:userId?")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Get history for user" })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        type: String,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-    })
-    @ApiParam({
-        name: "userId",
-        description: "Identifier of user for which to return history (admin role only)",
-        required: false,
-        type: String,
-    })
+    @ApiParamUserId("Identifier of user for which to return history (admin role only)")
+    @ApiOkResponse({ description: "The history was returned successfully" })
     async history(@Request() req, @Param("userId") userId?: string): Promise<OfferHistoryDTO[]> {
-        return this._offerService.getHistory(req.user.role == Role.Admin ? userId : req.user.id);
+        return this._offerService.getHistory(req.user.role === Role.Admin ? userId : req.user.id);
     }
 
     @Post()
-    @Roles(Role.Admin)
+    @Roles(Role.Admin, Role.Partner)
     @ApiOperation({ summary: "Create an offer" })
-    @ApiResponse({
-        status: HttpStatus.CREATED,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-    })
-    async create(@Body() cmd: CreateOfferCommand): Promise<void> {
+    @ApiOkResponse({ description: "The offer was created successfully" })
+    @ApiForbiddenResponse({ description: "Partner does not own this offer type" })
+    async create(@Request() req, @Body() cmd: CreateOfferCommand): Promise<void> {
+        await this.checkPartnerPermission(cmd.offerType, req); // !! check if offerType invalid still fails
         const toAddress = await this.getToAddress(cmd);
         await this._offerService.create(toAddress, cmd.offerType, BigInt(cmd.amount), cmd.additionalInfo);
     }
@@ -147,12 +129,7 @@ export class OfferController {
     @Post("transfer")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Transfer offers to another user" })
-    @ApiResponse({
-        status: HttpStatus.OK,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-    })
+    @ApiOkResponse({ description: "The offer was transferred successfully" })
     async transfer(@Request() req, @Body() cmd: TransferOfferCommand): Promise<void> {
         const asAdmin = req.user.role === Role.Admin;
         const userId = (asAdmin && cmd.fromUserId) || req.user.id;
@@ -161,47 +138,55 @@ export class OfferController {
     }
 
     @Put("template/:offerType/:offerInstance?")
-    @Roles(Role.Admin)
-    @ApiOperation({ summary: "Create template for an offer type" })
-    @ApiResponse({
-        status: HttpStatus.CREATED,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-    })
+    @Roles(Role.Admin, Role.Partner)
+    @ApiOperation({ summary: "Create/update template for an offer type/instance" })
+    @ApiParamOfferType()
+    @ApiParamOfferInstance()
+    @ApiOkResponse({ description: "The template was created/updated successfully" })
+    @ApiForbiddenResponse({ description: "Partner does not own this offer type" })
     async createTemplate(
+        @Request() req,
         @Body() cmd: CreateTemplateCommand,
         @Param("offerType", new ParseIntPipe()) offerType: number,
         @Param("offerInstance", new ParseIntPipe({ optional: true })) offerInstance?: number
     ): Promise<void> {
+        await this.checkPartnerPermission(offerType, req);
         await this._offerService.createTemplate(offerType, { ...cmd }, offerInstance);
     }
 
     @Delete("template/:offerType/:offerInstance?")
-    // !!    @Roles(Role.Admin)
-    @ApiOperation({ summary: "Delete template for an offer type" })
+    @Roles(Role.Admin, Role.Partner)
+    @ApiOperation({ summary: "Delete template for an offer type/instance" })
+    @ApiParamOfferType()
+    @ApiParamOfferInstance()
+    @ApiNoContentResponse({ description: "The template was deleted successfully" })
+    @ApiForbiddenResponse({ description: "Partner does not own this offer type" })
+    @HttpCode(HttpStatus.NO_CONTENT)
     async deleteTemplate(
+        @Request() req,
         @Param("offerType", new ParseIntPipe()) offerType: number,
         @Param("offerInstance", new ParseIntPipe({ optional: true })) offerInstance?: number
     ): Promise<void> {
+        await this.checkPartnerPermission(offerType, req);
         await this._offerService.deleteTemplate(offerType, offerInstance);
     }
 
     @Put("image/:offerType/:offerInstance?")
-    // !!    @Roles(Role.Admin)
-    @ApiOperation({ summary: "Add image for an offer type" })
-    @ApiResponse({
-        status: HttpStatus.CREATED,
-    })
-    @ApiResponse({
-        status: HttpStatus.BAD_REQUEST,
-    })
+    @Roles(Role.Admin, Role.Partner)
+    @ApiOperation({ summary: "Add/update image for an offer type/instance" })
+    @ApiParamOfferType()
+    @ApiParamOfferInstance()
+    @ApiOkResponse({ description: "The image was added/updated successfully" })
+    @ApiForbiddenResponse({ description: "Partner does not own this offer type" })
+    @ApiUnsupportedMediaTypeResponse({ description: "The image type is not supported" })
     @UseInterceptors(FileInterceptor('image'))
     async uploadImage(
+        @Request() req,
         @UploadedFile() file: Express.Multer.File,
         @Param("offerType", new ParseIntPipe()) offerType: number,
         @Param("offerInstance", new ParseIntPipe({ optional: true })) offerInstance?: number
     ): Promise<void> {
+        await this.checkPartnerPermission(offerType, req);
         const format = this.getImageFormat(file.buffer);
         if (!format) {
             throw new UnsupportedMediaTypeException("Only GIF/JPG/PNG image types are supported");
@@ -210,13 +195,26 @@ export class OfferController {
     }
 
     @Delete("image/:offerType/:offerInstance?")
-    // !!    @Roles(Role.Admin)
-    @ApiOperation({ summary: "Delete image for an offer type" })
+    @Roles(Role.Admin, Role.Partner)
+    @ApiOperation({ summary: "Delete image for an offer type/instance" })
+    @ApiParamOfferType()
+    @ApiParamOfferInstance()
+    @ApiNoContentResponse({ description: "The image was deleted successfully" })
+    @ApiForbiddenResponse({ description: "Partner does not own this offer type" })
+    @HttpCode(HttpStatus.NO_CONTENT)
     async deleteImage(
+        @Request() req,
         @Param("offerType", new ParseIntPipe()) offerType: number,
         @Param("offerInstance", new ParseIntPipe({ optional: true })) offerInstance?: number
     ): Promise<void> {
+        await this.checkPartnerPermission(offerType, req);
         await this._offerService.deleteImage(offerType, offerInstance);
+    }
+
+    private async checkPartnerPermission(offerType: number, req) {
+        if (req.user.role !== Role.Admin && !(await this._offerService.isOwner(offerType, req.user.partner))) {
+            throw new ForbiddenException("Partner does not own this offer type");
+        }
     }
 
     private async getToAddress(toDetails: { toAddress?: string, toUserId?: string }): Promise<string> {

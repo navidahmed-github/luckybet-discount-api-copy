@@ -130,4 +130,5 @@ export interface IOfferService {
     deleteTemplate(offerType: number, offerInstance?: number): Promise<void>;
     uploadImage(offerType: number, format: MimeType, data: Buffer, offerInstance?: number): Promise<void>;
     deleteImage(offerType: number, offerInstance?: number): Promise<void>;
+    isOwner(offerType: number, partner: string): Promise<boolean>
 }

@@ -213,6 +213,12 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
         }
     }
 
+    // TODO: base implementation on which to build future support for partners creating offers; it is envisaged that
+    // offer types will be allocated in blocks with each block having an owner which is then stored in the database
+    public async isOwner(_offerType: number, _partner: string): Promise<boolean> {
+        return false;        
+    }
+
     private async getWithFallback<T>(repository: MongoRepository<T>, offerType: number, offerInstance: number): Promise<[T, boolean]> {
         const overriden = await repository.findOne({ where: { offerType, offerInstance } });
         return overriden ? [overriden, true] : [await repository.findOne({ where: { offerType, offerInstance: undefined } }), false];

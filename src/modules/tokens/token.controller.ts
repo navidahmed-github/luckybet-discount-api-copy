@@ -35,7 +35,7 @@ export class TokenController {
         type: String,
     })
     async balance(@Request() req, @Param("userId") userId?: string): Promise<string> {
-        return (await this._tokenService.getBalance(req.user.role == Role.Admin ? userId : req.user.id)).toString();
+        return (await this._tokenService.getBalance(req.user.role === Role.Admin ? userId : req.user.id)).toString();
     }
 
     @Get("history/:userId?")
@@ -55,7 +55,7 @@ export class TokenController {
         type: String,
     })
     async history(@Request() req, @Param("userId") userId?: string): Promise<TokenHistoryDTO[]> {
-        return this._tokenService.getHistory(req.user.role == Role.Admin ? userId : req.user.id);
+        return this._tokenService.getHistory(req.user.role === Role.Admin ? userId : req.user.id);
     }
 
     @Post()
