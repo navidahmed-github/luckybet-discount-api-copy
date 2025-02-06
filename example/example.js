@@ -1,3 +1,4 @@
+const fs = require("fs");
 const axios = require("axios");
 
 const authTokens = {
@@ -21,7 +22,17 @@ const run = async () => {
     console.log(response.data);
     response = await http.get("/tokens/balance/1003");
     console.log(response.data);
-    response = await http.post("/offers", { toUserId: "1003", offerType: 1, amount: 0 });
+    response = await http.post("/offers/1", { toUserId: "1003", amount: 0 });
+    response = await http.put("/offers/template/1/3", {
+        name: "Offer-1-3",
+        description: "Description for specific instance",
+        attributes: [{ "trait_type": "discount_percent", value: 5 }, { "trait_type": "valid", value: "horses" }]
+    })
+    response = await http.put("/offers/template/1", {
+        name: "Offer-1",
+        description: "Description for general type",
+        attributes: [{ "trait_type": "discount_percent", value: 10 }, { "trait_type": "valid", value: "sports" }]
+    })
 };
 
 run().then(() => console.log("Done...")).catch(err => console.error(err));
