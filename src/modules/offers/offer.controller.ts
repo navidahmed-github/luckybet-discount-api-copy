@@ -1,12 +1,13 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Header, HttpCode, HttpStatus, Inject, Param, ParseIntPipe, Post, Put, Query, Request, Res, StreamableFile, UnauthorizedException, UnsupportedMediaTypeException, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, ForbiddenException, Get, Header, HttpCode, HttpStatus, Inject, Param, ParseIntPipe, Post, Put, Query, Request, Res, StreamableFile, UnsupportedMediaTypeException, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { ApiBearerAuth, ApiForbiddenResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiUnsupportedMediaTypeResponse } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { ApiBearerAuth, ApiForbiddenResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiUnsupportedMediaTypeResponse } from "@nestjs/swagger";
 import { createReadStream } from "fs";
 import { ProviderTokens } from "../../providerTokens";
 import { MimeType } from "../../common.types";
 import { DestinationInvalidError, OfferNotFoundError, OfferTokenIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
+import { RawTransfer } from "../../entities/transfer.entity";
 import { IUserService } from "../user/user.types";
 import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand } from "./offer.types";
 
@@ -115,27 +116,34 @@ export class OfferController {
         return this._offerService.getHistory(req.user.role === Role.Admin ? userId : req.user.id);
     }
 
-    @Post()
+    @Post(":offerType")
     @Roles(Role.Admin, Role.Partner)
     @ApiOperation({ summary: "Create an offer" })
+    @ApiParamOfferType()
     @ApiOkResponse({ description: "The offer was created successfully" })
     @ApiForbiddenResponse({ description: "Partner does not own this offer type" })
-    async create(@Request() req, @Body() cmd: CreateOfferCommand): Promise<void> {
-        await this.checkPartnerPermission(cmd.offerType, req); // !! check if offerType invalid still fails
+    async create(
+        @Request() req,
+        @Body() cmd: CreateOfferCommand,
+        @Param("offerType", new ParseIntPipe()) offerType: number,
+    ): Promise<RawTransfer> {
+        await this.checkPartnerPermission(offerType, req);
         const toAddress = await this.getToAddress(cmd);
-        await this._offerService.create(toAddress, cmd.offerType, BigInt(cmd.amount), cmd.additionalInfo);
+        return this._offerService.create(toAddress, offerType, BigInt(cmd.amount), cmd.additionalInfo); // !! check
     }
 
     @Post("transfer")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Transfer offers to another user" })
     @ApiOkResponse({ description: "The offer was transferred successfully" })
-    async transfer(@Request() req, @Body() cmd: TransferOfferCommand): Promise<void> {
+    async transfer(@Request() req, @Body() cmd: TransferOfferCommand): Promise<RawTransfer> {
         const asAdmin = req.user.role === Role.Admin;
         const userId = (asAdmin && cmd.fromUserId) || req.user.id;
         const toAddress = await this.getToAddress(cmd);
-        await this._offerService.transfer(userId, toAddress, BigInt(cmd.tokenId), asAdmin);
+        return this._offerService.transfer(userId, toAddress, BigInt(cmd.tokenId), asAdmin);
     }
+
+    // !! activate offer
 
     @Put("template/:offerType/:offerInstance?")
     @Roles(Role.Admin, Role.Partner)

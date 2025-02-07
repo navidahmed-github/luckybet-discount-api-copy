@@ -9,7 +9,7 @@ export class UserDTO {
 	id: string;
 
     @ApiProperty({
-		description: "The user's ethereum address",
+		description: "Wallet address of user",
 		example: "0x116B002A2593b9DD5a424ED81004A8F21BD6eEcd",
 		type: String,
 	})
@@ -18,7 +18,7 @@ export class UserDTO {
 
 export class CreateUserCommand {
 	@ApiProperty({
-		description: "Unique identifier for the user",
+		description: "Unique identifier for the user to create",
 		type: String,
 	})
 	id: string;

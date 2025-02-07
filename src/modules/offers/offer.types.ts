@@ -20,13 +20,6 @@ export class CreateOfferCommand {
 
     @IsNotEmpty()
     @ApiProperty({
-        description: "Offer type to generate",
-        type: Number,
-    })
-    offerType: number;
-
-    @IsNotEmpty()
-    @ApiProperty({
         description: "Amount of discount tokens to spend on offer",
         type: String,
     })

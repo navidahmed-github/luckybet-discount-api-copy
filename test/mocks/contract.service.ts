@@ -2,6 +2,10 @@ import { Contract, keccak256, Log, TransactionReceipt, TransactionResponse, Wall
 import { IContractService } from "../../src/services/contract.service";
 
 export class MockContractService implements IContractService {
+    public reset() {
+        MockTokenContract.reset();
+    }
+
     public async tokenContract(wallet?: Wallet): Promise<Contract> {
         return new MockTokenContract(wallet) as any;
     }
@@ -25,14 +29,19 @@ export class MockTransactionRequest {
 }
 
 export class MockTokenContract {
-    static balances: Map<string, bigint> = new Map();
-    static approvals: Map<string, [string, bigint]> = new Map();
+    static balances: Map<string, bigint>;
+    static approvals: Map<string, [string, bigint]>;
     walletAddress: string;
     isAdmin: boolean;
 
     constructor(wallet?: Wallet) {
         this.walletAddress = wallet?.address ?? ZeroAddress;
         this.isAdmin = wallet?.address === "0x14791697260E4c9A71f18484C9f997B308e59325";
+    }
+
+    static reset() {
+        MockTokenContract.balances = new Map<string, bigint>();
+        MockTokenContract.approvals = new Map<string, [string, bigint]>();
     }
 
     async queryFilter(): Promise<Log[]> {
@@ -57,6 +66,7 @@ export class MockTokenContract {
     }
 
     async transfer(to: string, amount: bigint): Promise<Partial<TransactionResponse>> {
+        if (amount > await this.balanceOf(this.walletAddress)) throw new Error("Insufficient balance");
         this._updateBalance(this.walletAddress, -amount);
         this._updateBalance(to, amount);
         return new MockTransactionRequest();
@@ -64,7 +74,8 @@ export class MockTokenContract {
 
     async transferFrom(from: string, to: string, amount: bigint): Promise<Partial<TransactionResponse>> {
         const [approvedAddress, approvedAmount] = MockTokenContract.approvals.get(from);
-        if (approvedAddress !== to || approvedAmount < amount) throw new Error("Not approved");
+        if (approvedAddress !== this.walletAddress || approvedAmount < amount) throw new Error("Not approved");
+        if (amount > await this.balanceOf(from)) throw new Error("Insufficient balance");
         this._updateBalance(from, -amount);
         this._updateBalance(to, amount);
         return new MockTransactionRequest();
@@ -73,6 +84,12 @@ export class MockTokenContract {
     async mint(to: string, amount: bigint): Promise<Partial<TransactionResponse>> {
         if (!this.isAdmin) throw new Error("Requires administrator rights");
         this._updateBalance(to, amount);
+        return new MockTransactionRequest();
+    }
+
+    async burn(amount: bigint): Promise<Partial<TransactionResponse>> {
+        if (amount > await this.balanceOf(this.walletAddress)) throw new Error("Insufficient balance");
+        this._updateBalance(this.walletAddress, -amount);
         return new MockTransactionRequest();
     }
 

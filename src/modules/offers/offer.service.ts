@@ -145,10 +145,11 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
         const offer = await this._contractService.offerContract(admin);
         let tx;
 
-        const toAddress = this._walletService.getLuckyBetWalletAddress();
+        const toAddress = this._walletService.getLuckyBetWallet().address; // !! replace with partner wallet
         if (amount > 0) {
+            // !! check balance
             const transfer = await this._tokenService.transfer(userId, toAddress, amount, true);
-            tx = await offer.mint(toAddress, offerType, transfer.txHash);
+            tx = await offer.mint(toAddress, BigInt(offerType), transfer.txHash);
         } else {
             tx = await offer.mint(toAddress, BigInt(offerType));
         }
@@ -172,7 +173,7 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
         await this._walletService.gasWallet(wallet);
         if (asAdmin) {
             const adminWallet = this._walletService.getAdminWallet();
-            const txApprove = await offer.setApprovalForAll(adminWallet.address, true);
+            const txApprove = await offer.setApprovalForAll(adminWallet.address, true); // !! use specific case
             await txApprove.wait();
             const adminOffer = await this._contractService.offerContract(adminWallet);
             tx = await adminOffer.transferFrom(wallet.address, toAddress, tokenId);
@@ -247,7 +248,7 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
         txHash: string,
         additionalInfo?: string
     ): Promise<RawTransfer> {
-        const offer = Object.assign({ tokenId: `0x${tokenId.toString(16)}` }, !additionalInfo ? {} : { additionalInfo });
+        const offer = Object.assign({ tokenId: `0x${tokenId.toString(16)}` }, additionalInfo && { additionalInfo });
         const transfer = { fromAddress, toAddress, blockNumber, txHash, offer };
         try {
             if (!await this._transferRepository.findOne({ where: { txHash } })) {

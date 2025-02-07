@@ -11,7 +11,7 @@ import {
     NotFoundException
 } from "@nestjs/common";
 import { catchError, Observable } from "rxjs";
-import { EntityCannotGetError, EntityMissingIdError, EntityNotFoundError } from "./error.types";
+import { DestinationInvalidError, EntityAlreadyExistsError, EntityCannotGetError, EntityMissingIdError, EntityNotFoundError, InsufficientBalanceError } from "./error.types";
 
 @Injectable()
 export class ErrorInterceptor implements NestInterceptor {
@@ -26,7 +26,10 @@ export class ErrorInterceptor implements NestInterceptor {
                 if (err instanceof EntityCannotGetError) {
                     throw new NotFoundException(errorData, err.message);
                 }
-                if (err instanceof EntityMissingIdError) {
+                if ((err instanceof EntityMissingIdError) ||
+                    (err instanceof EntityAlreadyExistsError) ||
+                    (err instanceof DestinationInvalidError) ||
+                    (err instanceof InsufficientBalanceError)) {
                     throw new BadRequestException(errorData, err.message);
                 }
                 if (err.message?.toLowerCase().includes("bad request")) {

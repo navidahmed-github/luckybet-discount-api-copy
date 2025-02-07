@@ -4,15 +4,17 @@ import { getRepositoryToken } from "@nestjs/typeorm";
 import { ProviderTokens } from "../src/providerTokens";
 import { UserAlreadyExistsError, UserNotFoundError } from "../src/error.types";
 import { User } from "../src/entities/user.entity";
+import { IUserService } from "../src/modules/user/user.types";
 import { UserService } from "../src/modules/user/user.service";
 import { WalletService, WalletServiceSettingKeys } from "../src/services/wallet.service";
 import { EthereumProviderService } from "../src/services/ethereumProvider.service";
 import { MockAtomicSequenceService } from "./mocks/atomicSequence.service";
 import { makeMockUserRepository } from "./mocks/respositories";
 
-let testModule: TestingModule;
-
 describe("Users", () => {
+    let testModule: TestingModule;
+    let userService: IUserService;
+
     beforeEach(async () => {
         testModule = await Test.createTestingModule({
             providers: [
@@ -56,6 +58,8 @@ describe("Users", () => {
             ],
         }).compile();
         await testModule.init();
+
+        userService = testModule.get<IUserService>(ProviderTokens.UserService);
     });
 
     afterEach(async () => {
@@ -63,7 +67,6 @@ describe("Users", () => {
     });
 
     it("Should create user and wallet", async () => {
-        const userService = testModule.get<UserService>(ProviderTokens.UserService);
         for (var i = 1; i <= 3; i++)
             await userService.create(`test-user${i}`);
 
@@ -82,8 +85,6 @@ describe("Users", () => {
     });
 
     it("Should not be able to create duplicate users", async () => {
-        const userService = testModule.get<UserService>(ProviderTokens.UserService);
-
         await userService.create("test-user1");
         await expect(userService.create("test-user1")).rejects.toThrow(UserAlreadyExistsError);
     });

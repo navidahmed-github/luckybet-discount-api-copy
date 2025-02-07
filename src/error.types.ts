@@ -115,10 +115,17 @@ export class OfferTokenIdError extends OfferError {
 	}	
 }
 
-//=== Address errors
+//=== Miscellaneous errors
 export class DestinationInvalidError extends Error {
 	constructor(msg: string) {
 		super(msg);
 		this.name = DestinationInvalidError.name;
+	}
+}
+
+export class InsufficientBalanceError extends Error {
+	constructor(msg: string) {
+		super(msg);
+		this.name = InsufficientBalanceError.name;
 	}
 }

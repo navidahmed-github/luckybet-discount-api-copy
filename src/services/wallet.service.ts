@@ -8,7 +8,7 @@ export interface IWalletService {
 	connect(wallet: Wallet): Wallet;
 	getWallet(ordinal: number, connect?: boolean): Wallet;
 	getAdminWallet(): Wallet;
-	getLuckyBetWalletAddress(): string;
+	getLuckyBetWallet(): Wallet;
 	gasWallet(wallet: Wallet): Promise<void>
 }
 
@@ -16,7 +16,7 @@ export enum WalletServiceSettingKeys {
 	WALLET_MNEMONIC = "WALLET_MNEMONIC",
 	ADMIN_WALLET_PRIVATE_KEY = "ADMIN_WALLET_PRIVATE_KEY",
 	GAS_STATION_WALLET_PRIVATE_KEY = "GAS_STATION_WALLET_PRIVATE_KEY",
-	LUCKYBET_WALLET_ADDRESS = "LUCKYBET_WALLET_ADDRESS",
+	LUCKYBET_WALLET_PRIVATE_KEY = "LUCKYBET_WALLET_PRIVATE_KEY",
 	WALLET_GAS_AMOUNT = "WALLET_GAS_AMOUNT"
 }
 
@@ -53,8 +53,9 @@ export class WalletService implements IWalletService {
 		return new Wallet(privateKey);
 	}
 
-	public getLuckyBetWalletAddress(): string {
-		return this.config.get(WalletServiceSettingKeys.LUCKYBET_WALLET_ADDRESS);
+	public getLuckyBetWallet(): Wallet {
+		const privateKey = this.config.get(WalletServiceSettingKeys.LUCKYBET_WALLET_PRIVATE_KEY);
+		return new Wallet(privateKey);
 	}
 
 	public async gasWallet(wallet: Wallet): Promise<void> {
