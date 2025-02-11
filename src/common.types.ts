@@ -1,3 +1,10 @@
+export enum OperationStatus {
+    Pending = "Pending",
+    Processing = "Processing",
+    Complete = "Complete",
+    Error = "Error"
+}
+
 export enum TransferType {
     Send = 'Send',
     Receive = 'Receive',

@@ -1,21 +1,27 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
 import { Contract, JsonRpcApiProvider, Log, ZeroAddress } from "ethers";
+import { v4 as uuid_v4 } from 'uuid';
 import { ProviderTokens } from "../../providerTokens";
-import { TransferType } from "../../common.types";
-import { InsufficientBalanceError, MONGO_DUPLICATE_KEY } from "../../error.types";
+import { OperationStatus, TransferType } from "../../common.types";
+import { AirdropNotFoundError, InsufficientBalanceError, MONGO_DUPLICATE_KEY } from "../../error.types";
 import { RawTransfer, Transfer } from "../../entities/transfer.entity";
+import { AirdropChunk } from "../../entities/airdrop.entity";
 import { User } from "../../entities/user.entity";
 import { IContractService } from "../../services/contract.service";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
 import { IUserService } from "../user/user.types";
-import { TokenHistoryDTO, ITokenService } from "./token.types";
+import { IJobService } from "../job/job.types";
+import { TokenHistoryDTO, ITokenService, AirdropDestinationDTO, AirdropStatus } from "./token.types";
+
+const AIRDROP_MAX_MINT_PER_TX = 10;
+const AIRDROP_JOB_NAME = "airdropTask";
 
 @Injectable()
-export class TokenService implements ITokenService, OnModuleInit, OnModuleDestroy {
+export class TokenService implements ITokenService, OnApplicationBootstrap, OnModuleInit, OnModuleDestroy {
     private readonly _logger = new Logger(TokenService.name);
     private readonly _provider: JsonRpcApiProvider;
     private readonly _userTableName: string;
@@ -25,6 +31,9 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
     constructor(
         @Inject(ProviderTokens.UserService)
         private _userService: IUserService,
+
+        @Inject(ProviderTokens.JobService)
+        private _jobService: IJobService,
 
         @Inject(ProviderTokens.ContractService)
         private _contractService: IContractService,
@@ -37,6 +46,9 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
 
         @InjectRepository(Transfer)
         private _transferRepository: MongoRepository<Transfer>,
+
+        @InjectRepository(AirdropChunk)
+        private _airdropRepository: MongoRepository<AirdropChunk>,
 
         @InjectRepository(User)
         userRepository: MongoRepository<User>,
@@ -53,6 +65,10 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
         Promise.allSettled(evts.filter(evt => "args" in evt).map(async (evt) =>
             this.saveTransfer(evt.args[0], evt.args[1], evt.args[2], evt.blockNumber, evt.transactionHash)));
         this._tokenEvent.on("Transfer", this.transferListener);
+    }
+
+    public async onApplicationBootstrap() {
+        await this._jobService.define(AIRDROP_JOB_NAME, this.airdropProcessor);
     }
 
     public async onModuleDestroy() {
@@ -170,6 +186,109 @@ export class TokenService implements ITokenService, OnModuleInit, OnModuleDestro
             const txReceipt = await tx.wait();
             return this.saveTransfer(wallet.address, toAddress, amount, txReceipt.blockNumber, txReceipt.hash);
         });
+    }
+
+    public async airdrop(destinations: AirdropDestinationDTO[], amount: bigint): Promise<string> {
+        const users = await this._userService.getAll();
+        const addressMap = new Map(users.map(u => [u.id, u.address]));
+        const [valid, invalid] = destinations
+            .map(d => d.userId ? { ...destinations, address: d ?? addressMap.get(d.userId) } : d)
+            .reduce(([v, i], curr) => curr.address ? [[...v, curr], i] : [v, [...i, curr]], [[], []]);
+
+        const requestId = uuid_v4();
+        try {
+            while (valid.length) {
+                const chunkAddresses = valid.splice(0, AIRDROP_MAX_MINT_PER_TX);
+                this._airdropRepository.save({
+                    requestId,
+                    status: OperationStatus.Pending,
+                    amount: amount.toString(),
+                    destinations: chunkAddresses
+                });
+            }
+            if (invalid.length) {
+                this._airdropRepository.save({
+                    requestId,
+                    status: OperationStatus.Error,
+                    error: "Users not found",
+                    amount: amount.toString(),
+                    destinations: invalid
+                });
+            }
+            await this._jobService.run(AIRDROP_JOB_NAME, requestId);
+            return requestId;
+        } catch (err) {
+            // operation has failed therefore make best attempt to delete all chunks
+            // !! test this
+            await this._airdropRepository.delete({ requestId }).catch(_ => this._logger.verbose(`Deleting airdrop records failed for request: ${requestId}`));
+            throw new Error(); // !!
+        }
+    }
+
+    public async airdropStatus(requestId: string): Promise<AirdropStatus> {
+        const chunks = await this._airdropRepository.find({ where: { requestId } });
+        if (!chunks.length) {
+            throw new AirdropNotFoundError(requestId);
+        }
+        if (chunks.every(c => [OperationStatus.Error, OperationStatus.Complete].includes(c.status))) {
+            const errorChunks = chunks.filter(c => c.status == OperationStatus.Error);
+            if (!errorChunks.length) {
+                return { status: OperationStatus.Complete };
+            }
+            const errors = errorChunks.flatMap(c => c.destinations.map(d => { return { ...d, error: c.error } }));
+            return { status: OperationStatus.Error, errors }
+        }
+        return { status: OperationStatus.Processing };
+    }
+
+    private airdropProcessor = async (requestId: string, touch: () => Promise<void>) => {
+        const admin = this._walletService.getAdminWallet();
+        const token = await this._contractService.tokenContract(admin);
+        const chunks = await this._airdropRepository.find({ where: { requestId } });
+
+        // check whether any chunks are partially processed, this should only happen if the server is stopped and
+        // restarted while in the middle of processing a job
+        for (const processing of chunks.filter(c => c.status == OperationStatus.Processing)) {
+            try {
+                this._logger.verbose(`Recovering airdrop chunk ${processing.id} with requestId: ${requestId}`);
+                await touch();
+                if (processing.txHash) {
+                    // the request was submitted to chain so wait for response and use status to set final result
+                    const txReceipt = await this._provider.waitForTransaction(processing.txHash);
+                    if (txReceipt?.status > 0) {
+                        await this._airdropRepository.update(processing.id, { status: OperationStatus.Complete });
+                    } else {
+                        throw new Error("Contract call reverted");
+                    }
+                } else {
+                    // the request was never submitted to chain so can treat as though it was never started
+                    await this._airdropRepository.update(processing.id, { status: OperationStatus.Pending });
+                }
+            } catch (err) {
+                const error = `Failed to process airdrop chunk ${processing.id}: ${err.messsage}`;
+                await this._airdropRepository.update(processing.id, { status: OperationStatus.Error, error })
+                    .catch(_ => this._logger.verbose(`Updating airdrop records failed for request: ${requestId}`));
+            }
+        }
+
+        // job service ensures that only one instance of this task is running at any one time
+        for (const pending of chunks.filter(c => c.status == OperationStatus.Pending)) {
+            try {
+                this._logger.verbose(`Processing airdrop chunk ${pending.id} with requestId: ${requestId}`);
+                await touch();
+                await this._airdropRepository.update(pending.id, { status: OperationStatus.Processing });
+                const tx = await token.mintMany(pending.destinations.map(d => d.address), BigInt(pending.amount));
+                await this._airdropRepository.update(pending.id, { txHash: tx.hash });
+                await tx.wait();
+                await this._airdropRepository.update(pending.id, { status: OperationStatus.Complete });
+                this._logger.verbose(`Processed airdrop chunk ${pending.id}`);
+            } catch (err) {
+                console.log(err);
+                const error = `Failed to process airdrop chunk ${pending.id}: ${err.messsage}`;
+                await this._airdropRepository.update(pending.id, { status: OperationStatus.Error, error })
+                    .catch(_ => this._logger.verbose(`Updating airdrop records failed for request: ${requestId}`));
+            }
+        }
     }
 
     private transferListener = async (from: string, to: string, value: bigint, { log }: { log: Log }) => {

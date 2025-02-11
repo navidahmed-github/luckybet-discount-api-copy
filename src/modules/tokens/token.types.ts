@@ -1,7 +1,38 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
-import { TransferType } from "../../common.types";
-import { RawTransfer, Transfer } from "../../entities/transfer.entity";
+import { OperationStatus, TransferType } from "../../common.types";
+import { RawTransfer } from "../../entities/transfer.entity";
+
+export class AirdropDestinationDTO {
+    userId?: string; // !! say in text should not provide address if give this
+
+    address?: string;
+}
+
+export class AirdropErrorDTO extends AirdropDestinationDTO {
+    error: string;
+}
+
+export class AirdropCommand {
+    amount: string;
+
+    @ApiProperty({
+        description: "Destinations to mint tokens to",
+        type: () => AirdropDestinationDTO,
+        isArray: true
+    })
+    destinations: AirdropDestinationDTO[];
+}
+
+export class AirdropResponse {
+    requestId: string;
+}
+
+export class AirdropStatus {
+    status: OperationStatus;
+
+    errors?: AirdropErrorDTO[];
+}
 
 export class CreateTokenCommand {
     @ApiProperty({
@@ -119,4 +150,6 @@ export interface ITokenService {
     create(toAddress: string, amount: bigint): Promise<RawTransfer>;
     destroy(amount: bigint): Promise<void>;
     transfer(userId: string, toAddress: string, amount: bigint, asAdmin: boolean): Promise<RawTransfer>;
+    airdrop(destinations: AirdropDestinationDTO[], amount: bigint): Promise<string>;
+    airdropStatus(requestId: string): Promise<AirdropStatus>;
 }
