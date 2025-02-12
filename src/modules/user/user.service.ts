@@ -67,7 +67,7 @@ export class UserService implements IUserService, OnModuleInit {
 			// unique constraint will ensure that race conditions are handled
 			if (err instanceof MongoBulkWriteError && err.code == MONGO_DUPLICATE_KEY)
 				throw new UserAlreadyExistsError(userId);
-			throw new UserCannotCreateError(err.message)
+			throw new UserCannotCreateError(err.message);
 		}
 	}
 

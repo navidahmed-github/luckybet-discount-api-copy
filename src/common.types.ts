@@ -1,3 +1,5 @@
+import { ApiParam } from "@nestjs/swagger";
+
 export enum OperationStatus {
     Pending = "Pending",
     Processing = "Processing",
@@ -17,3 +19,10 @@ export enum MimeType {
     JPG = 'image/jpeg',
     PNG = 'image/png'
 }
+
+export const ApiParamUserId = (description: string, required: boolean = false) => ApiParam({
+    name: "userId",
+    description,
+    required,
+    type: String,
+})

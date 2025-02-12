@@ -1,5 +1,5 @@
-import { MimeType } from "src/common.types";
 import { Column, CreateDateColumn, Entity, Index, ObjectId, ObjectIdColumn, UpdateDateColumn } from "typeorm";
+import { MimeType } from "../common.types";
 
 @Entity("image")
 export class OfferImage {

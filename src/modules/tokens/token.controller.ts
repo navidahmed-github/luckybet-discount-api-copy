@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Post, Request } from "@nestjs/common";
 import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiInternalServerErrorResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiResponse } from "@nestjs/swagger";
 import { ProviderTokens } from "../../providerTokens";
+import { ApiParamUserId } from "../../common.types";
 import { DestinationInvalidError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
@@ -21,12 +22,7 @@ export class TokenController {
     @Get("owned/:userId?")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Get balance for user" })
-    @ApiParam({
-        name: "userId",
-        description: "Identifier of user for which to return balance (admin role only)",
-        required: false,
-        type: String,
-    })
+    @ApiParamUserId("Identifier of user for which to return balance (admin role only)")
     @ApiOkResponse({
         description: "Balance was returned successfully",
         type: TokenBalanceDTO,
@@ -41,12 +37,7 @@ export class TokenController {
     @Get("history/:userId?")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Get history for user" })
-    @ApiParam({
-        name: "userId",
-        description: "Identifier of user for which to return history (admin role only)",
-        required: false,
-        type: String,
-    })
+    @ApiParamUserId("Identifier of user for which to return history (admin role only)")
     @ApiOkResponse({
         description: "History was returned successfully",
         type: TokenHistoryDTO,

@@ -6,6 +6,7 @@ import { Contract, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../src/providerTokens";
 import { InsufficientBalanceError } from "../src/error.types";
 import { Transfer } from "../src/entities/transfer.entity";
+import { AirdropChunk } from "../src/entities/airdrop.entity";
 import { User } from "../src/entities/user.entity";
 import { ITokenService } from "../src/modules/tokens/token.types";
 import { IUserService, UserDTO } from "../src/modules/user/user.types";
@@ -16,7 +17,8 @@ import { IContractService } from "../src/services/contract.service";
 import { MockContractService } from "./mocks/contract.service";
 import { MockProviderService } from "./mocks/ethereumProvider.service";
 import { MockAtomicSequenceService } from "./mocks/atomicSequence.service";
-import { makeMockTransferRepository, makeMockUserRepository } from "./mocks/respositories";
+import { MockJobService } from "./mocks/job.service";
+import { makeMockAirdropRepository, makeMockTransferRepository, makeMockUserRepository } from "./mocks/respositories";
 
 const TEST_ADDRESS = "0x59240752f3Cb66Fb46AB5fdd1a9B0f5bfA17576d";
 
@@ -72,6 +74,10 @@ describe("Tokens", () => {
                     useClass: MockAtomicSequenceService,
                 },
                 {
+                    provide: ProviderTokens.JobService,
+                    useClass: MockJobService,
+                },
+                {
                     provide: ProviderTokens.UserService,
                     useClass: UserService,
                 },
@@ -86,6 +92,10 @@ describe("Tokens", () => {
                 {
                     provide: getRepositoryToken(Transfer),
                     useValue: makeMockTransferRepository(),
+                },
+                {
+                    provide: getRepositoryToken(AirdropChunk),
+                    useValue: makeMockAirdropRepository(),
                 },
             ],
         }).compile();

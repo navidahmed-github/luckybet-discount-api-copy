@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiForbiddenResponse, ApiNoContentResponse, ApiOkRespons
 import { FileInterceptor } from "@nestjs/platform-express";
 import { createReadStream } from "fs";
 import { ProviderTokens } from "../../providerTokens";
-import { MimeType } from "../../common.types";
+import { ApiParamUserId, MimeType } from "../../common.types";
 import { DestinationInvalidError, OfferNotFoundError, OfferTokenIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
@@ -13,13 +13,6 @@ import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryD
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
-
-const ApiParamUserId = (description: string, required: boolean = false) => ApiParam({
-    name: "userId",
-    description,
-    required,
-    type: String,
-})
 
 const ApiParamTokenId = (description: string) => ApiParam({
     name: "tokenId",

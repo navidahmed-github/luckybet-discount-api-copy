@@ -1,5 +1,6 @@
 const fs = require("fs");
 const axios = require("axios");
+const ethers = require("ethers");
 
 const authTokens = {
     jwtAdmin: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTEiLCJuYW1lIjoiVGVzdCIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTUxNjIzOTAyMn0.fsnCh3s0v8GGFBGhpLT5LClI0RAHCboOtI3YLLtFFmI"
@@ -7,11 +8,18 @@ const authTokens = {
 
 const apiHost = "http://localhost:3005";
 
+function awaitSeconds(seconds) {
+	return new Promise(resolve => {
+		setTimeout(() => resolve(), seconds * 1000);
+	});
+}
+
 const run = async () => {
     const http = axios.create({
         baseURL: apiHost,
         headers: { Authorization: `Bearer ${authTokens.jwtAdmin}` },
     });
+
 
     response = await http.post("/users", { id: "1001" });
     response = await http.post("/users", { id: "1003" });
@@ -22,6 +30,17 @@ const run = async () => {
     console.log(response.data);
     response = await http.get("/tokens/balance/1003");
     console.log(response.data);
+
+    const destinations = Array.from({ length: 35 }, _ => ({ address: ethers.Wallet.createRandom().address }));
+    response = await http.post("/tokens/airdrop", { amount: "100", destinations });
+    console.log(response.data);
+    const { requestId } = response.data;
+    for (let i = 0; i < 30; i++) {
+        response = await http.get("/tokens/airdrop/status/" + requestId);
+        console.log(response.data);
+        await awaitSeconds(1);
+    }
+
     response = await http.post("/offers/1", { toUserId: "1003", amount: 0 });
     response = await http.put("/offers/template/1/3", {
         name: "Offer-1-3",
