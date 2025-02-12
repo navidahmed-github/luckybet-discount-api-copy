@@ -220,7 +220,7 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
         } catch (err) {
             // operation has failed therefore make best attempt to delete all chunks
             // !! test this
-            await this._airdropRepository.delete({ requestId }).catch(_ => this._logger.verbose(`Deleting airdrop records failed for request: ${requestId}`));
+            await this._airdropRepository.delete({ requestId }).catch(_ => this._logger.error(`Deleting airdrop records failed for request: ${requestId}`));
             throw new Error(); // !!
         }
     }
@@ -250,7 +250,7 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
         // restarted while in the middle of processing a job
         for (const processing of chunks.filter(c => c.status == OperationStatus.Processing)) {
             try {
-                this._logger.verbose(`Recovering airdrop chunk ${processing.id} with requestId: ${requestId}`);
+                this._logger.verbose(`Recovering airdrop chunk: ${processing.id} with requestId: ${requestId}`);
                 await touch();
                 if (processing.txHash) {
                     // the request was submitted to chain so wait for response and use status to set final result
@@ -265,28 +265,29 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
                     await this._airdropRepository.update(processing.id, { status: OperationStatus.Pending });
                 }
             } catch (err) {
-                const error = `Failed to process airdrop chunk ${processing.id}: ${err.messsage}`;
+                const error = `Failed to process airdrop chunk: ${processing.id}, reason: ${err.message}`;
+                this._logger.error(error, err.stack);
                 await this._airdropRepository.update(processing.id, { status: OperationStatus.Error, error })
-                    .catch(_ => this._logger.verbose(`Updating airdrop records failed for request: ${requestId}`));
+                    .catch(_ => this._logger.error(`Updating airdrop records failed for request: ${requestId}`));
             }
         }
 
         // job service ensures that only one instance of this task is running at any one time
         for (const pending of chunks.filter(c => c.status == OperationStatus.Pending)) {
             try {
-                this._logger.verbose(`Processing airdrop chunk ${pending.id} with requestId: ${requestId}`);
+                this._logger.verbose(`Processing airdrop chunk: ${pending.id} with requestId: ${requestId}`);
                 await touch();
                 await this._airdropRepository.update(pending.id, { status: OperationStatus.Processing });
                 const tx = await token.mintMany(pending.destinations.map(d => d.address), BigInt(pending.amount));
                 await this._airdropRepository.update(pending.id, { txHash: tx.hash });
                 await tx.wait();
                 await this._airdropRepository.update(pending.id, { status: OperationStatus.Complete });
-                this._logger.verbose(`Processed airdrop chunk ${pending.id}`);
+                this._logger.verbose(`Processed airdrop chunk: ${pending.id}`);
             } catch (err) {
-                console.log(err);
-                const error = `Failed to process airdrop chunk ${pending.id}: ${err.messsage}`;
+                const error = `Failed to process airdrop chunk: ${pending.id}, reason: ${err.message}`;
+                this._logger.error(error, err.stack);
                 await this._airdropRepository.update(pending.id, { status: OperationStatus.Error, error })
-                    .catch(_ => this._logger.verbose(`Updating airdrop records failed for request: ${requestId}`));
+                    .catch(_ => this._logger.error(`Updating airdrop records failed for request: ${requestId}`));
             }
         }
     }

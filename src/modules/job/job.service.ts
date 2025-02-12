@@ -32,13 +32,13 @@ export class JobService implements IJobService, OnApplicationBootstrap, OnModule
     async define<T>(name: string, process: (data: T, touch: () => Promise<void>) => Promise<void>) {
         this._agenda.define(name, async job => {
             const { name, _id } = job.attrs;
-            const touch = async () => { await job.touch(); }
+            const touch = async () => { await job.touch() }
             try {
                 this._logger.verbose(`Job starting ${name}: ${_id}`);
                 await process(job.attrs.data, touch);
                 this._logger.verbose(`Job finished ${name}: ${_id} `);
             } catch (err) {
-                this._logger.error(`Job failed ${name}: ${_id}`, err)
+                this._logger.error(`Job failed ${name}: ${_id}, reason: ${err.message}`, err.stack)
             }
         });
     }
