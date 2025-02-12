@@ -5,7 +5,7 @@ import { DestinationInvalidError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { IUserService } from "../user/user.types";
-import { CreateTokenCommand, TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, DestroyTokenCommand } from "./token.types";
+import { CreateTokenCommand, TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, DestroyTokenCommand, AirdropCommand, AirdropResponse, AirdropStatus } from "./token.types";
 
 @Controller("tokens")
 @ApiBearerAuth()
@@ -96,6 +96,39 @@ export class TokenController {
         const toAddress = await this.getToAddress(cmd);
         const rawTransfer = await this._tokenService.transfer(userId, toAddress, BigInt(cmd.amount), asAdmin);
         return { ...rawTransfer, amount: rawTransfer.token.amount };
+    }
+
+    @Post("airdrop")
+    @Roles(Role.Admin)
+    @ApiOperation({ summary: "Mint tokens to multiple destinations" })
+    @ApiOkResponse({ description: "The minting request was submitted successfully" })
+    @HttpCode(HttpStatus.ACCEPTED)
+    async airdrop(@Body() cmd: AirdropCommand): Promise<AirdropResponse> {
+        if (!cmd.destinations.length) {
+            throw new DestinationInvalidError("At least one destination is required");
+        }
+        if (cmd.destinations.some(d => d.address && d.userId)) {
+            throw new DestinationInvalidError("Cannot provide both user and address as destination");
+        }
+        if (cmd.destinations.some(d => !d.address && !d.userId)) { // !! should check valid Ethereum address
+            throw new DestinationInvalidError("A user or valid address is required as a destination");
+        }
+        const requestId = await this._tokenService.airdrop(cmd.destinations, BigInt(cmd.amount));
+        return { requestId };
+    }
+
+    @Get("airdrop/status/:requestId")
+    @Roles(Role.Admin)
+    @ApiOperation({ summary: "Get status of specified airdrop" })
+    @ApiParam({
+        name: "requestId",
+        description: "Identifier of airdrop request for which to retrieve status",
+        required: true,
+        type: String,
+    })
+    @ApiOkResponse({ description: "The status was successfully returned" })
+    async airdropStatus(@Param("requestId") requestId: string): Promise<AirdropStatus> {
+        return await this._tokenService.airdropStatus(requestId);
     }
 
     private async getToAddress(toDetails: { toAddress?: string, toUserId?: string }): Promise<string> {

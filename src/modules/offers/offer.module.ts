@@ -7,15 +7,15 @@ import { Template } from "../../entities/template.entity";
 import { OfferImage } from "../../entities/image.entity";
 import { User } from "../../entities/user.entity";
 import { UserModule } from "../user/user.module";
+import { TokenModule } from "../tokens/token.module";
 import { ContractService } from "../../services/contract.service";
 import { WalletService } from "../../services/wallet.service";
 import { EthereumProviderService } from "../../services/ethereumProvider.service";
-import { TokenService } from "../tokens/token.service";
 import { OfferService } from "./offer.service";
 import { OfferController } from "./offer.controller";
 
 @Module({
-    imports: [TypeOrmModule.forFeature([User, Transfer, Template, OfferImage]), UserModule],
+    imports: [TypeOrmModule.forFeature([User, Transfer, Template, OfferImage]), UserModule, TokenModule],
     exports: [ProviderTokens.OfferService],
     controllers: [OfferController],
     providers: [
@@ -31,10 +31,6 @@ import { OfferController } from "./offer.controller";
         {
             provide: ProviderTokens.EthereumProviderService,
             useClass: EthereumProviderService,
-        },
-        {
-            provide: ProviderTokens.TokenService,
-            useClass: TokenService,
         },
         {
             provide: ProviderTokens.OfferService,

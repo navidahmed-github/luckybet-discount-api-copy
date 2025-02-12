@@ -3,6 +3,7 @@ export const MONGO_DUPLICATE_KEY = 11000;
 // String values used in user-facing error messages
 export enum EntityNames {
 	User = "User",
+	Airdrop = "Airdrop",
 	Offer = "Offer"
 }
 
@@ -21,7 +22,7 @@ export abstract class EntityCannotGetError extends Error {
 		this.name = EntityCannotGetError.name;
 	}
 
-    get data(): unknown {
+	get data(): unknown {
 		return {
 			entity: this.entity,
 			entityId: this.entityId,
@@ -93,6 +94,14 @@ export class UserMismatchAddressError extends UserError {
 	}
 }
 
+//=== Token errors
+export class AirdropNotFoundError extends EntityNotFoundError {
+	constructor(id: string) {
+		super(EntityNames.Airdrop, id);
+		this.name = AirdropNotFoundError.name;
+	}
+}
+
 //=== Offer errors
 export class OfferError extends Error {
 	constructor(message: string) {
@@ -112,7 +121,7 @@ export class OfferTokenIdError extends OfferError {
 	constructor(message: string) {
 		super(message);
 		this.name = OfferTokenIdError.name;
-	}	
+	}
 }
 
 //=== Miscellaneous errors
