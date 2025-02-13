@@ -3,13 +3,12 @@ import { ApiBearerAuth, ApiForbiddenResponse, ApiNoContentResponse, ApiOkRespons
 import { FileInterceptor } from "@nestjs/platform-express";
 import { createReadStream } from "fs";
 import { ProviderTokens } from "../../providerTokens";
-import { ApiParamUserId, MimeType } from "../../common.types";
-import { DestinationInvalidError, OfferNotFoundError, OfferTokenIdError } from "../../error.types";
+import { ApiQueryAddress, ApiQueryUserId, MimeType } from "../../common.types";
+import { OfferNotFoundError, OfferTokenIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { RawTransfer } from "../../entities/transfer.entity";
-import { IUserService } from "../user/user.types";
-import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand } from "./offer.types";
+import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, ActivateOfferCommand } from "./offer.types";
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
@@ -41,9 +40,6 @@ export class OfferController {
     constructor(
         @Inject(ProviderTokens.OfferService)
         private _offerService: IOfferService,
-
-        @Inject(ProviderTokens.UserService)
-        private _userService: IUserService
     ) { }
 
     @Get(":tokenId")
@@ -91,22 +87,27 @@ export class OfferController {
         return new StreamableFile(Buffer.from(image.data.toString('hex'), 'hex'));
     }
 
-    @Get("owned/:userId?")
+    @Get("owned")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Get offers owned for user" })
-    @ApiParamUserId("Identifier of user for which to return offer (admin role only)")
+    @ApiQueryUserId("Identifier of user for which to return offers (admin role only)")
+    @ApiQueryAddress("Address for which to return offers (admin role only)")
     @ApiOkResponse({ description: "The offers were returned successfully" })
-    async owned(@Request() req, @Param("userId") userId?: string): Promise<string[]> {
-        return this._offerService.getOffers(req.user.role === Role.Admin ? userId : req.user.id);
+    async owned(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<string[]> {
+        const dest = req.user.role === Role.Admin ? { userId, address } : { userId: req.user.id };
+        const offers = await this._offerService.getOffers(dest);
+        return offers.map(o => `0x${o.toString(16)}`);
     }
 
-    @Get("history/:userId?")
+    @Get("history")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Get history for user" })
-    @ApiParamUserId("Identifier of user for which to return history (admin role only)")
+    @ApiQueryUserId("Identifier of user for which to return history (admin role only)")
+    @ApiQueryAddress("Address for which to return history (admin role only)")
     @ApiOkResponse({ description: "The history was returned successfully" })
-    async history(@Request() req, @Param("userId") userId?: string): Promise<OfferHistoryDTO[]> {
-        return this._offerService.getHistory(req.user.role === Role.Admin ? userId : req.user.id);
+    async history(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<OfferHistoryDTO[]> {
+        const dest = req.user.role === Role.Admin ? { userId, address } : { userId: req.user.id };
+        return this._offerService.getHistory(dest);
     }
 
     @Post(":offerType")
@@ -121,8 +122,7 @@ export class OfferController {
         @Param("offerType", new ParseIntPipe()) offerType: number,
     ): Promise<RawTransfer> {
         await this.checkPartnerPermission(offerType, req);
-        const toAddress = await this.getToAddress(cmd);
-        return this._offerService.create(toAddress, offerType, BigInt(cmd.amount), cmd.additionalInfo); // !! check
+        return this._offerService.create(cmd.to, offerType, BigInt(cmd.amount), cmd.additionalInfo);
     }
 
     @Post("transfer")
@@ -132,11 +132,16 @@ export class OfferController {
     async transfer(@Request() req, @Body() cmd: TransferOfferCommand): Promise<RawTransfer> {
         const asAdmin = req.user.role === Role.Admin;
         const userId = (asAdmin && cmd.fromUserId) || req.user.id;
-        const toAddress = await this.getToAddress(cmd);
-        return this._offerService.transfer(userId, toAddress, BigInt(cmd.tokenId), asAdmin);
+        return this._offerService.transfer({ userId, asAdmin }, cmd.to, BigInt(cmd.tokenId));
     }
 
-    // !! activate offer
+    @Post("activate")
+    @Roles(Role.User)
+    @ApiOperation({ summary: "Transfer offers to another user" })
+    @ApiOkResponse({ description: "The offer was transferred successfully" })
+    async activate(@Request() req, @Body() cmd: ActivateOfferCommand): Promise<RawTransfer> {
+        return this._offerService.activate(req.user.id, BigInt(cmd.tokenId));
+    }
 
     @Put("template/:offerType/:offerInstance?")
     @Roles(Role.Admin, Role.Partner)
@@ -216,18 +221,6 @@ export class OfferController {
         if (req.user.role !== Role.Admin && !(await this._offerService.isOwner(offerType, req.user.partner))) {
             throw new ForbiddenException("Partner does not own this offer type");
         }
-    }
-
-    private async getToAddress(toDetails: { toAddress?: string, toUserId?: string }): Promise<string> {
-        if (toDetails.toUserId) {
-            if (toDetails.toAddress)
-                throw new DestinationInvalidError("Cannot provide both user and address as destination");
-            const wallet = await this._userService.getUserWallet(toDetails.toUserId);
-            return wallet.address;
-        }
-        if (!toDetails.toAddress)
-            throw new DestinationInvalidError("No destination provided");
-        return toDetails.toAddress;
     }
 
     private parseTokenId(tokenId: string): [number, number] {

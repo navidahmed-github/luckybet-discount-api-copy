@@ -1,7 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Request } from "@nestjs/common";
-import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiInternalServerErrorResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation } from "@nestjs/swagger";
+import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiInternalServerErrorResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam } from "@nestjs/swagger";
 import { ProviderTokens } from "../../providerTokens";
-import { ApiParamUserId } from "../../common.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { CreateUserCommand, IUserService, UserDTO } from "./user.types";
@@ -41,7 +40,12 @@ export class UserController {
 	@Get(":userId")
 	@Roles(Role.Admin)
 	@ApiOperation({ summary: "Get a user" })
-	@ApiParamUserId("Identifier of user to return", true)
+	@ApiParam({
+		name: "userId",
+		description: "Identifier of user to return",
+		required: true,
+		type: String,
+	})
 	@ApiOkResponse({
 		description: "User was returned successfully",
 		type: UserDTO,

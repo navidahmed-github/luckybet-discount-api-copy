@@ -2,11 +2,11 @@ import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, On
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
-import { Contract, JsonRpcApiProvider, Log, ZeroAddress } from "ethers";
+import { Contract, JsonRpcApiProvider, Log, Wallet, ZeroAddress } from "ethers";
 import { v4 as uuid_v4 } from 'uuid';
 import { ProviderTokens } from "../../providerTokens";
-import { OperationStatus, TransferType } from "../../common.types";
-import { AirdropNotFoundError, InsufficientBalanceError, MONGO_DUPLICATE_KEY } from "../../error.types";
+import { IDestination, ISource, OperationStatus, TransferType } from "../../common.types";
+import { AirdropNotFoundError, DestinationInvalidError, InsufficientBalanceError, MONGO_DUPLICATE_KEY } from "../../error.types";
 import { RawTransfer, Transfer } from "../../entities/transfer.entity";
 import { AirdropChunk } from "../../entities/airdrop.entity";
 import { User } from "../../entities/user.entity";
@@ -15,7 +15,7 @@ import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
 import { IUserService } from "../user/user.types";
 import { IJobService } from "../job/job.types";
-import { TokenHistoryDTO, ITokenService, AirdropDestinationDTO, AirdropStatus } from "./token.types";
+import { TokenHistoryDTO, ITokenService, AirdropStatus } from "./token.types";
 
 const AIRDROP_MAX_MINT_PER_TX = 10;
 const AIRDROP_JOB_NAME = "airdropTask";
@@ -75,16 +75,16 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
         this._tokenEvent?.off("Transfer", this.transferListener);
     }
 
-    public async getBalance(userId: string): Promise<bigint> {
-        this._logger.verbose(`Retrieving balance for user: ${userId}`);
-        const wallet = await this._userService.getUserWallet(userId);
+    public async getBalance(dest: IDestination): Promise<bigint> {
+        const [address] = await this.parseDestination(dest);
+        this._logger.verbose(`Retrieving balance for address: ${address}`);
         const token = await this._contractService.tokenContract();
-        return await token.balanceOf(wallet.address);
+        return await token.balanceOf(address);
     }
 
-    public async getHistory(userId: string): Promise<TokenHistoryDTO[]> {
-        this._logger.verbose(`Retrieving token history for user: ${userId}`);
-        const wallet = await this._userService.getUserWallet(userId);
+    public async getHistory(dest: IDestination): Promise<TokenHistoryDTO[]> {
+        const [address] = await this.parseDestination(dest);
+        this._logger.verbose(`Retrieving token history for address: ${address}`);
         const lookupPipeline = (prefix: string) => {
             return {
                 $lookup: {
@@ -100,7 +100,7 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
                 $match: {
                     $and: [
                         { token: { $exists: true } },
-                        { $or: [{ fromAddress: wallet.address }, { toAddress: wallet.address }] }
+                        { $or: [{ fromAddress: address }, { toAddress: address }] }
                     ]
                 }
             },
@@ -112,13 +112,13 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
 
         function toHistory(transfer: Transfer & { fromUser: User[], toUser: User[] }): TokenHistoryDTO | null {
             let dto = null;
-            if (transfer.toAddress == wallet.address) {
+            if (transfer.toAddress == address) {
                 const otherUser = transfer.fromUser.length ? { otherUser: transfer.fromUser[0].userId } : {};
                 dto = (transfer.fromAddress == ZeroAddress) ?
                     { type: TransferType.Mint } :
                     { type: TransferType.Receive, otherAddress: transfer.fromAddress, ...otherUser };
             }
-            if (transfer.fromAddress == wallet.address) {
+            if (transfer.fromAddress == address) {
                 const otherUser = transfer.toUser.length ? { otherUser: transfer.toUser[0].userId } : {};
                 dto = (transfer.toAddress == ZeroAddress) ?
                     { type: TransferType.Burn } :
@@ -132,7 +132,8 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
         }
     }
 
-    public async create(toAddress: string, amount: bigint): Promise<RawTransfer> {
+    public async create(to: IDestination, amount: bigint): Promise<RawTransfer> {
+        const [toAddress] = await this.parseDestination(to);
         this._logger.verbose(`Mint tokens to: ${toAddress} amount: ${amount}`);
         const admin = this._walletService.getAdminWallet();
         const token = await this._contractService.tokenContract(admin);
@@ -161,9 +162,10 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
         });
     }
 
-    public async transfer(userId: string, toAddress: string, amount: bigint, asAdmin: boolean): Promise<RawTransfer> {
-        this._logger.verbose(`Transfer tokens from user: ${userId} to: ${toAddress} amount: ${amount}`);
-        const wallet = await this._userService.getUserWallet(userId);
+    public async transfer(from: ISource, to: IDestination, amount: bigint): Promise<RawTransfer> {
+        const [toAddress] = await this.parseDestination(to);
+        this._logger.verbose(`Transfer tokens from user: ${from.userId} to: ${toAddress} amount: ${amount}`);
+        const wallet = await this._userService.getUserWallet(from.userId);
         const token = await this._contractService.tokenContract(wallet);
         let tx;
 
@@ -173,7 +175,7 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
         }
 
         await this._walletService.gasWallet(wallet);
-        if (asAdmin) {
+        if (from.asAdmin) {
             const adminWallet = this._walletService.getAdminWallet();
             const txApprove = await token.approve(adminWallet.address, amount);
             await txApprove.wait();
@@ -188,7 +190,17 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
         });
     }
 
-    public async airdrop(destinations: AirdropDestinationDTO[], amount: bigint): Promise<string> {
+    public async airdrop(destinations: IDestination[], amount: bigint): Promise<string> {
+        if (!destinations.length) {
+            throw new DestinationInvalidError("At least one destination is required");
+        }
+        if (destinations.some(d => d.address && d.userId)) {
+            throw new DestinationInvalidError("Cannot provide both user and address as destination");
+        }
+        if (destinations.some(d => !d.address && !d.userId)) { // !! should check valid Ethereum address
+            throw new DestinationInvalidError("A user or valid address is required as a destination");
+        }
+
         const users = await this._userService.getAll();
         const addressMap = new Map(users.map(u => [u.id, u.address]));
         const [valid, invalid] = destinations
@@ -235,7 +247,7 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
             if (!errorChunks.length) {
                 return { status: OperationStatus.Complete };
             }
-            const errors = errorChunks.flatMap(c => c.destinations.map(d => { return { ...d, error: c.error } }));
+            const errors = errorChunks.flatMap(c => c.destinations.map(d => { return { ...d, reason: c.error } }));
             return { status: OperationStatus.Error, errors }
         }
         return { status: OperationStatus.Processing };
@@ -326,4 +338,17 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
         }
         return transfer;
     }
+
+    private async parseDestination(to: IDestination): Promise<[string, Wallet?]> {
+        if (to.userId) {
+            if (to.address)
+                throw new DestinationInvalidError("Cannot provide both user and address as destination");
+            const wallet = await this._userService.getUserWallet(to.userId);
+            return [wallet.address, wallet];
+        }
+        if (!to.address)
+            throw new DestinationInvalidError("No destination provided");
+        return [to.address, null];
+    }
+
 }

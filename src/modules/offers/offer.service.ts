@@ -2,10 +2,10 @@ import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nest
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
-import { Contract, EventLog, id, JsonRpcApiProvider, Log, TransactionReceipt, ZeroAddress } from "ethers";
+import { Contract, EventLog, id, JsonRpcApiProvider, Log, TransactionReceipt, Wallet, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { MimeType, TransferType } from "../../common.types";
-import { MONGO_DUPLICATE_KEY, OfferTokenIdError } from "../../error.types";
+import { IDestination, ISource, MimeType, TransferType } from "../../common.types";
+import { DestinationInvalidError, InsufficientBalanceError, MONGO_DUPLICATE_KEY, NotApprovedError, OfferTokenIdError } from "../../error.types";
 import { RawTransfer, Transfer } from "../../entities/transfer.entity";
 import { User } from "../../entities/user.entity";
 import { Metadata, Template } from "../../entities/template.entity";
@@ -14,10 +14,9 @@ import { IContractService } from "../../services/contract.service";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
 import { IUserService } from "../user/user.types";
-import { ITokenService } from "../tokens/token.types";
 import { IOfferService, OfferHistoryDTO } from "./offer.types";
 
-const TRANSFER_TOPIC = id("Transfer(address,address,uint256)");
+export const TRANSFER_TOPIC = id("Transfer(address,address,uint256)");
 
 @Injectable()
 export class OfferService implements IOfferService, OnModuleInit, OnModuleDestroy {
@@ -30,9 +29,6 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
     constructor(
         @Inject(ProviderTokens.UserService)
         private _userService: IUserService,
-
-        @Inject(ProviderTokens.TokenService)
-        private _tokenService: ITokenService,
 
         @Inject(ProviderTokens.ContractService)
         private _contractService: IContractService,
@@ -75,6 +71,7 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
 
     public async getMetadata(offerType: number, offerInstance: number, detailed?: boolean): Promise<Metadata> {
         const [template, overriden] = await this.getWithFallback(this._templateRepository, offerType, offerInstance);
+        // !! return additonalInfo
         return template?.metadata ? { ...template.metadata, ...(detailed && { usesDefault: !overriden }) } : null;
     }
 
@@ -82,16 +79,22 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
         return (await this.getWithFallback(this._imageRepository, offerType, offerInstance))[0];
     }
 
-    public async getOffers(userId: string): Promise<string[]> {
-        this._logger.verbose(`Retrieving offers for user: ${userId}`);
-        const wallet = await this._userService.getUserWallet(userId);
+    public async getOffers(dest: IDestination): Promise<bigint[]> {
+        const [address] = await this.parseDestination(dest);
+        this._logger.verbose(`Retrieving offers for address: ${address}`);
         const offer = await this._contractService.offerContract();
-        return []; // !!
+        const balance = await offer.balanceOf(address);
+        const offers = [];
+
+        for (let i = 0; i < balance; i++) {
+            offers.push(await offer.tokenOfOwnerByIndex(address, i));
+        }
+        return offers;
     }
 
-    public async getHistory(userId: string): Promise<OfferHistoryDTO[]> {
-        this._logger.verbose(`Retrieving offer history for user: ${userId}`);
-        const wallet = await this._userService.getUserWallet(userId);
+    public async getHistory(dest: IDestination): Promise<OfferHistoryDTO[]> {
+        const [address] = await this.parseDestination(dest);
+        this._logger.verbose(`Retrieving offer history for address: ${address}`);
         const lookupPipeline = (prefix: string) => {
             return {
                 $lookup: {
@@ -107,7 +110,7 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
                 $match: {
                     $and: [
                         { offer: { $exists: true } },
-                        { $or: [{ fromAddress: wallet.address }, { toAddress: wallet.address }] }
+                        { $or: [{ fromAddress: address }, { toAddress: address }] }
                     ]
                 }
             },
@@ -119,13 +122,13 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
 
         function toHistory(transfer: Transfer & { fromUser: User[], toUser: User[] }): OfferHistoryDTO | null {
             let dto = null;
-            if (transfer.toAddress == wallet.address) {
+            if (transfer.toAddress == address) {
                 const otherUser = transfer.fromUser.length ? { otherUser: transfer.fromUser[0].userId } : {};
                 dto = (transfer.fromAddress == ZeroAddress) ?
                     { type: TransferType.Mint } :
                     { type: TransferType.Receive, otherAddress: transfer.fromAddress, ...otherUser };
             }
-            if (transfer.fromAddress == wallet.address) {
+            if (transfer.fromAddress == address) {
                 const otherUser = transfer.toUser.length ? { otherUser: transfer.toUser[0].userId } : {};
                 dto = (transfer.toAddress == ZeroAddress) ?
                     { type: TransferType.Burn } :
@@ -139,41 +142,56 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
         }
     }
 
-    public async create(userId: string, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransfer> {
-        this._logger.verbose(`Mint offer type: ${offerType} to: ${userId} spent: ${amount} tokens`);
-        const admin = this._walletService.getAdminWallet();
-        const offer = await this._contractService.offerContract(admin);
-        let tx;
+    public async create(to: IDestination, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransfer> {
+        const [toAddress, toWallet] = await this.parseDestination(to);
+        this._logger.verbose(`Mint offer type: ${offerType} to: ${toAddress} spent: ${amount} tokens`);
+        const adminWallet = this._walletService.getAdminWallet();
+        const adminToken = await this._contractService.tokenContract(adminWallet);
+        const adminOffer = await this._contractService.offerContract(adminWallet);
+        let txOffer;
 
-        const toAddress = this._walletService.getLuckyBetWallet().address; // !! replace with partner wallet
         if (amount > 0) {
-            // !! check balance
-            const transfer = await this._tokenService.transfer(userId, toAddress, amount, true);
-            tx = await offer.mint(toAddress, BigInt(offerType), transfer.txHash);
+            const toBalance = await adminToken.balanceOf(toAddress);
+            if (toBalance < amount) {
+                throw new InsufficientBalanceError(`Offer requires ${amount} tokens when only ${toBalance} available`);
+            }
+            if (toWallet) { // if user is specified then auto-approve
+                await this._walletService.gasWallet(toWallet);
+                const toToken = await this._contractService.tokenContract(toWallet);
+                const txApprove = await toToken.approve(adminWallet.address, amount);
+                await txApprove.wait();
+            } else if (await adminToken.allowance(toAddress, adminWallet.address) < amount) {
+                throw new NotApprovedError(`Offer requires admin wallet: ${adminWallet.address} to be approved to transfer tokens`);
+            }
+            const partnerAddress = this._walletService.getLuckyBetWallet().address; // !! replace with partner wallet
+            const txToken = await adminToken.transferFrom(toAddress, partnerAddress, amount);
+            const txTokenReceipt = await txToken.wait();
+            txOffer = await adminOffer.mint(toAddress, BigInt(offerType), txTokenReceipt.hash);
         } else {
-            tx = await offer.mint(toAddress, BigInt(offerType));
+            txOffer = await adminOffer.mint(toAddress, BigInt(offerType));
         }
         return this.lockTransfer(async () => {
-            const txReceipt: TransactionReceipt = await tx.wait();
+            const txOfferReceipt: TransactionReceipt = await txOffer.wait();
             // !! need to check receipt status to check mined
-            const tokenId = (txReceipt.logs.find(l => l.topics[0] === TRANSFER_TOPIC) as EventLog)?.args[2];
+            const tokenId = (txOfferReceipt.logs.find(l => l.topics[0] === TRANSFER_TOPIC) as EventLog)?.args[2];
             if (!tokenId) {
-                throw new OfferTokenIdError("Failed to read tokenID from event");
+                throw new OfferTokenIdError("Failed to read token identifier from event");
             }
-            return this.saveTransfer(ZeroAddress, toAddress, tokenId, txReceipt.blockNumber, txReceipt.hash, additionalInfo);
+            return this.saveTransfer(ZeroAddress, toAddress, tokenId, txOfferReceipt.blockNumber, txOfferReceipt.hash, additionalInfo);
         });
     }
 
-    public async transfer(userId: string, toAddress: string, tokenId: bigint, asAdmin: boolean): Promise<RawTransfer> {
-        this._logger.verbose(`Transfer token: ${tokenId} from user: ${userId} to: ${toAddress}`);
-        const wallet = await this._userService.getUserWallet(userId);
+    public async transfer(from: ISource, to: IDestination, tokenId: bigint): Promise<RawTransfer> {
+        const [toAddress,] = await this.parseDestination(to);
+        this._logger.verbose(`Transfer offer: ${tokenId} from user: ${from.userId} to: ${toAddress}`);
+        const wallet = await this._userService.getUserWallet(from.userId);
         const offer = await this._contractService.offerContract(wallet);
         let tx;
 
         await this._walletService.gasWallet(wallet);
-        if (asAdmin) {
+        if (from.asAdmin) {
             const adminWallet = this._walletService.getAdminWallet();
-            const txApprove = await offer.setApprovalForAll(adminWallet.address, true); // !! use specific case
+            const txApprove = await offer.approve(adminWallet.address, tokenId);
             await txApprove.wait();
             const adminOffer = await this._contractService.offerContract(adminWallet);
             tx = await adminOffer.transferFrom(wallet.address, toAddress, tokenId);
@@ -183,6 +201,16 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
         return this.lockTransfer(async () => {
             const txReceipt = await tx.wait();
             return this.saveTransfer(wallet.address, toAddress, tokenId, txReceipt.blockNumber, txReceipt.hash);
+        });
+    }
+
+    public async activate(userId: string, tokenId: bigint): Promise<RawTransfer> {
+        const wallet = await this._userService.getUserWallet(userId);
+        const offer = await this._contractService.offerContract(wallet);
+        const tx = await offer.burn(tokenId);
+        return this.lockTransfer(async () => {
+            const txReceipt = await tx.wait();
+            return this.saveTransfer(wallet.address, ZeroAddress, tokenId, txReceipt.blockNumber, txReceipt.hash);
         });
     }
 
@@ -217,7 +245,7 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
     // TODO: base implementation on which to build future support for partners creating offers; it is envisaged that
     // offer types will be allocated in blocks with each block having an owner which is then stored in the database
     public async isOwner(_offerType: number, _partner: string): Promise<boolean> {
-        return false;        
+        return false;
     }
 
     private async getWithFallback<T>(repository: MongoRepository<T>, offerType: number, offerInstance: number): Promise<[T, boolean]> {
@@ -260,5 +288,17 @@ export class OfferService implements IOfferService, OnModuleInit, OnModuleDestro
                 this._logger.error(`Failed to write transfer with txHash: ${txHash}, reason: ${err.messsage}`, err.stack);
         }
         return transfer;
+    }
+
+    private async parseDestination(to: IDestination): Promise<[string, Wallet?]> {
+        if (to.userId) {
+            if (to.address)
+                throw new DestinationInvalidError("Cannot provide both user and address as destination");
+            const wallet = await this._userService.getUserWallet(to.userId);
+            return [wallet.address, wallet];
+        }
+        if (!to.address)
+            throw new DestinationInvalidError("No destination provided");
+        return [to.address, null];
     }
 }

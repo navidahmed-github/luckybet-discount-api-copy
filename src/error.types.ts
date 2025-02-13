@@ -138,3 +138,10 @@ export class InsufficientBalanceError extends Error {
 		this.name = InsufficientBalanceError.name;
 	}
 }
+
+export class NotApprovedError extends Error {
+	constructor(msg: string) {
+		super(msg);
+		this.name = NotApprovedError.name;
+	}
+}

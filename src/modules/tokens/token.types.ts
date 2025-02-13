@@ -1,27 +1,17 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
-import { OperationStatus, TransferType } from "../../common.types";
+import { DestinationDTO, DestinationErrorDTO, IDestination, ISource, OperationStatus, TransferType } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
-
-export class AirdropDestinationDTO {
-    userId?: string; // !! say in text should not provide address if give this
-
-    address?: string;
-}
-
-export class AirdropErrorDTO extends AirdropDestinationDTO {
-    error: string;
-}
 
 export class AirdropCommand {
     amount: string;
 
     @ApiProperty({
         description: "Destinations to mint tokens to",
-        type: () => AirdropDestinationDTO,
+        type: () => DestinationDTO,
         isArray: true
     })
-    destinations: AirdropDestinationDTO[];
+    destinations: DestinationDTO[];
 }
 
 export class AirdropResponse {
@@ -31,21 +21,15 @@ export class AirdropResponse {
 export class AirdropStatus {
     status: OperationStatus;
 
-    errors?: AirdropErrorDTO[];
+    errors?: DestinationErrorDTO[];
 }
 
 export class CreateTokenCommand {
     @ApiProperty({
-        description: "Identifier of user to transfer token to",
-        type: String,
+        description: "Where to transfer token to",
+        type: () => DestinationDTO,
     })
-    toUserId?: string;
-
-    @ApiProperty({
-        description: "Address of wallet to transfer token to",
-        type: String,
-    })
-    toAddress?: string;
+    to: DestinationDTO;
 
     @IsNotEmpty()
     @ApiProperty({
@@ -55,18 +39,9 @@ export class CreateTokenCommand {
     amount: string;
 }
 
-export class DestroyTokenCommand {
-    @IsNotEmpty()
-    @ApiProperty({
-        description: "The amount of the token to burn",
-        type: String,
-    })
-    amount: string;
-}
-
 export class TransferTokenCommand extends CreateTokenCommand {
     @ApiProperty({
-        description: "Identifier of user to transfer token from",
+        description: "Identifier of user to transfer token from (admin only)",
         type: String,
     })
     fromUserId?: string;
@@ -145,11 +120,11 @@ export class TokenTransferDTO {
 }
 
 export interface ITokenService {
-    getBalance(userId: string): Promise<bigint>;
-    getHistory(userId: string): Promise<TokenHistoryDTO[]>;
-    create(toAddress: string, amount: bigint): Promise<RawTransfer>;
+    getBalance(dest: IDestination): Promise<bigint>;
+    getHistory(dest: IDestination): Promise<TokenHistoryDTO[]>;
+    create(to: IDestination, amount: bigint): Promise<RawTransfer>;
     destroy(amount: bigint): Promise<void>;
-    transfer(userId: string, toAddress: string, amount: bigint, asAdmin: boolean): Promise<RawTransfer>;
-    airdrop(destinations: AirdropDestinationDTO[], amount: bigint): Promise<string>;
+    transfer(from: ISource, to: IDestination, amount: bigint): Promise<RawTransfer>;
+    airdrop(destinations: IDestination[], amount: bigint): Promise<string>;
     airdropStatus(requestId: string): Promise<AirdropStatus>;
 }

@@ -9,9 +9,9 @@ const authTokens = {
 const apiHost = "http://localhost:3005";
 
 function awaitSeconds(seconds) {
-	return new Promise(resolve => {
-		setTimeout(() => resolve(), seconds * 1000);
-	});
+    return new Promise(resolve => {
+        setTimeout(() => resolve(), seconds * 1000);
+    });
 }
 
 const run = async () => {
@@ -23,12 +23,12 @@ const run = async () => {
 
     response = await http.post("/users", { id: "1001" });
     response = await http.post("/users", { id: "1003" });
-    response = await http.post("/tokens", { toUserId: "1003", amount: "500" });
-    response = await http.post("/tokens/transfer", { fromUserId: "1003", toUserId: "1001", amount: "400" });
-    response = await http.post("/tokens/transfer", { fromUserId: "1003", toAddress: "0x59240752f3Cb66Fb46AB5fdd1a9B0f5bfA17576d", amount: "40" });
-    response = await http.get("/tokens/history/1003");
+    response = await http.post("/tokens", { to: { userId: "1003" }, amount: "500" });
+    response = await http.post("/tokens/transfer", { fromUserId: "1003", to: { userId: "1001" }, amount: "400" });
+    response = await http.post("/tokens/transfer", { fromUserId: "1003", to: { address: "0x59240752f3Cb66Fb46AB5fdd1a9B0f5bfA17576d" }, amount: "40" });
+    response = await http.get("/tokens/history?userId=1003");
     console.log(response.data);
-    response = await http.get("/tokens/balance/1003");
+    response = await http.get("/tokens/owned?userId=1003");
     console.log(response.data);
 
     const destinations = Array.from({ length: 35 }, _ => ({ address: ethers.Wallet.createRandom().address }));
@@ -41,7 +41,7 @@ const run = async () => {
         await awaitSeconds(1);
     }
 
-    response = await http.post("/offers/1", { toUserId: "1003", amount: 0 });
+    response = await http.post("/offers/1", { to: { userId: "1003" }, amount: 0 });
     response = await http.put("/offers/template/1/3", {
         name: "Offer-1-3",
         description: "Description for specific instance",

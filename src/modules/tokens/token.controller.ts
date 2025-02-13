@@ -1,12 +1,10 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Post, Request } from "@nestjs/common";
-import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiInternalServerErrorResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiResponse } from "@nestjs/swagger";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, Request } from "@nestjs/common";
+import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiInternalServerErrorResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam } from "@nestjs/swagger";
 import { ProviderTokens } from "../../providerTokens";
-import { ApiParamUserId } from "../../common.types";
-import { DestinationInvalidError } from "../../error.types";
+import { ApiQueryAddress, ApiQueryUserId } from "../../common.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
-import { IUserService } from "../user/user.types";
-import { CreateTokenCommand, TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, DestroyTokenCommand, AirdropCommand, AirdropResponse, AirdropStatus } from "./token.types";
+import { TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, AirdropCommand, AirdropResponse, AirdropStatus, CreateTokenCommand } from "./token.types";
 
 @Controller("tokens")
 @ApiBearerAuth()
@@ -14,37 +12,38 @@ export class TokenController {
     constructor(
         @Inject(ProviderTokens.TokenService)
         private _tokenService: ITokenService,
-
-        @Inject(ProviderTokens.UserService)
-        private _userService: IUserService
     ) { }
 
-    @Get("owned/:userId?")
+    @Get("owned")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Get balance for user" })
-    @ApiParamUserId("Identifier of user for which to return balance (admin role only)")
+    @ApiQueryUserId("Identifier of user for which to return balance (admin role only)")
+    @ApiQueryAddress("Address for which to return balance (admin role only)")
     @ApiOkResponse({
         description: "Balance was returned successfully",
         type: TokenBalanceDTO,
     })
     @ApiNotFoundResponse({ description: "User could not be found" })
     @ApiInternalServerErrorResponse({ description: "Wallet mismatch" })
-    async balance(@Request() req, @Param("userId") userId?: string): Promise<TokenBalanceDTO> {
-        const balance = await this._tokenService.getBalance(req.user.role === Role.Admin ? userId : req.user.id);
+    async balance(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<TokenBalanceDTO> {
+        const dest = req.user.role === Role.Admin ? { userId, address } : { userId: req.user.id };
+        const balance = await this._tokenService.getBalance(dest);
         return { balance: balance.toString() };
     }
 
-    @Get("history/:userId?")
+    @Get("history")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Get history for user" })
-    @ApiParamUserId("Identifier of user for which to return history (admin role only)")
+    @ApiQueryUserId("Identifier of user for which to return history (admin role only)")
+    @ApiQueryAddress("Address for which to return history (admin role only)")
     @ApiOkResponse({
         description: "History was returned successfully",
         type: TokenHistoryDTO,
     })
     @ApiNotFoundResponse({ description: "User could not be found" })
-    async history(@Request() req, @Param("userId") userId?: string): Promise<TokenHistoryDTO[]> {
-        return this._tokenService.getHistory(req.user.role === Role.Admin ? userId : req.user.id);
+    async history(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<TokenHistoryDTO[]> {
+        const dest = req.user.role === Role.Admin ? { userId, address } : { userId: req.user.id };
+        return this._tokenService.getHistory(dest);
     }
 
     @Post()
@@ -57,19 +56,24 @@ export class TokenController {
     @ApiInternalServerErrorResponse({ description: "Failed to mint tokens" })
     @HttpCode(HttpStatus.CREATED)
     async create(@Body() cmd: CreateTokenCommand): Promise<TokenTransferDTO> {
-        const toAddress = await this.getToAddress(cmd);
-        const rawTransfer = await this._tokenService.create(toAddress, BigInt(cmd.amount));
+        const rawTransfer = await this._tokenService.create(cmd.to, BigInt(cmd.amount));
         return { ...rawTransfer, amount: rawTransfer.token.amount }
     }
 
-    @Delete()
+    @Delete(":amount")
     @Roles(Role.Admin)
     @ApiOperation({ summary: "Destroy tokens from Lucky Bet wallet" })
+    @ApiParam({
+        name: "amount",
+        description: "Amount of tokens to burn",
+        required: true,
+        type: String,
+    })
     @ApiNoContentResponse({ description: "Tokens were burnt successfully" })
     @ApiInternalServerErrorResponse({ description: "Failed to burn tokens" })
     @HttpCode(HttpStatus.NO_CONTENT)
-    async destroy(@Body() cmd: DestroyTokenCommand): Promise<void> {
-        await this._tokenService.destroy(BigInt(cmd.amount));
+    async destroy(@Param("amount") amount: string): Promise<void> {
+        await this._tokenService.destroy(BigInt(amount));
     }
 
     @Post("transfer")
@@ -84,8 +88,7 @@ export class TokenController {
     async transfer(@Request() req, @Body() cmd: TransferTokenCommand): Promise<TokenTransferDTO> {
         const asAdmin = req.user.role === Role.Admin;
         const userId = (asAdmin && cmd.fromUserId) || req.user.id;
-        const toAddress = await this.getToAddress(cmd);
-        const rawTransfer = await this._tokenService.transfer(userId, toAddress, BigInt(cmd.amount), asAdmin);
+        const rawTransfer = await this._tokenService.transfer({ userId, asAdmin }, cmd.to, BigInt(cmd.amount));
         return { ...rawTransfer, amount: rawTransfer.token.amount };
     }
 
@@ -95,15 +98,6 @@ export class TokenController {
     @ApiOkResponse({ description: "The minting request was submitted successfully" })
     @HttpCode(HttpStatus.ACCEPTED)
     async airdrop(@Body() cmd: AirdropCommand): Promise<AirdropResponse> {
-        if (!cmd.destinations.length) {
-            throw new DestinationInvalidError("At least one destination is required");
-        }
-        if (cmd.destinations.some(d => d.address && d.userId)) {
-            throw new DestinationInvalidError("Cannot provide both user and address as destination");
-        }
-        if (cmd.destinations.some(d => !d.address && !d.userId)) { // !! should check valid Ethereum address
-            throw new DestinationInvalidError("A user or valid address is required as a destination");
-        }
         const requestId = await this._tokenService.airdrop(cmd.destinations, BigInt(cmd.amount));
         return { requestId };
     }
@@ -120,17 +114,5 @@ export class TokenController {
     @ApiOkResponse({ description: "The status was successfully returned" })
     async airdropStatus(@Param("requestId") requestId: string): Promise<AirdropStatus> {
         return await this._tokenService.airdropStatus(requestId);
-    }
-
-    private async getToAddress(toDetails: { toAddress?: string, toUserId?: string }): Promise<string> {
-        if (toDetails.toUserId) {
-            if (toDetails.toAddress)
-                throw new DestinationInvalidError("Cannot provide both user and address as destination");
-            const wallet = await this._userService.getUserWallet(toDetails.toUserId);
-            return wallet.address;
-        }
-        if (!toDetails.toAddress)
-            throw new DestinationInvalidError("No destination provided");
-        return toDetails.toAddress;
     }
 }
