@@ -9,11 +9,11 @@ import { AirdropCannotCreateError, AirdropNotFoundError, DestinationInvalidError
 import { RawTransfer } from "../../entities/transfer.entity";
 import { AirdropChunk } from "../../entities/airdrop.entity";
 import { User } from "../../entities/user.entity";
+import { TransferService } from "../../services/transfer.service";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
 import { IJobService } from "../job/job.types";
 import { TokenHistoryDTO, ITokenService, AirdropStatus } from "./token.types";
-import { TransferService } from "../../services/transfer.service";
 
 const AIRDROP_MAX_MINT_PER_TX = 10;
 const AIRDROP_JOB_NAME = "airdropTask";
@@ -56,7 +56,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
 
     public async create(to: IDestination, amount: bigint): Promise<RawTransfer> {
         const [toAddress] = await this.parseDestination(to);
-        this._logger.verbose(`Mint tokens to: ${toAddress} amount: ${amount}`);
+        this._logger.verbose(`Mint tokens to: ${toAddress}, amount: ${amount}`);
         const admin = this._walletService.getAdminWallet();
         const token = await this._contractService.tokenContract(admin);
         const tx = await token.mint(toAddress, amount);
@@ -86,7 +86,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
 
     public async transfer(from: ISource, to: IDestination, amount: bigint): Promise<RawTransfer> {
         const [toAddress] = await this.parseDestination(to);
-        this._logger.verbose(`Transfer tokens from user: ${from.userId} to: ${toAddress} amount: ${amount} ${toAdminString(from)}`);
+        this._logger.verbose(`Transfer tokens from user: ${from.userId}, to: ${toAddress}, amount: ${amount} ${toAdminString(from)}`);
         const wallet = await this._userService.getUserWallet(from.userId);
         const token = await this._contractService.tokenContract(wallet);
         let tx;

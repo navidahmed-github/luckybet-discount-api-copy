@@ -8,7 +8,7 @@ import { MONGO_DUPLICATE_KEY, UserAlreadyExistsError, UserCannotCreateError, Use
 import { IWalletService } from "../../services/wallet.service";
 import { IAtomicSequenceService } from "../../services/atomicSequence.service";
 import { User } from "../../entities/user.entity";
-import { IUserService, UserDTO } from "./user.types";
+import { IUserService } from "./user.types";
 
 @Injectable()
 export class UserService implements IUserService, OnModuleInit {

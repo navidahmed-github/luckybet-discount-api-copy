@@ -97,7 +97,7 @@ export interface IOfferService {
     create(to: IDestination, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransfer>;
     activate(userId: string, tokenId: bigint): Promise<RawTransfer>;
     transfer(from: ISource, to: IDestination, tokenId: bigint): Promise<RawTransfer>;
-    createTemplate(offerType: number, metdata: Metadata, offerInstance?: number): Promise<void>;
+    createTemplate(offerType: number, metadata: Metadata, offerInstance?: number): Promise<void>;
     deleteTemplate(offerType: number, offerInstance?: number): Promise<void>;
     uploadImage(offerType: number, format: MimeType, data: Buffer, offerInstance?: number): Promise<void>;
     deleteImage(offerType: number, offerInstance?: number): Promise<void>;

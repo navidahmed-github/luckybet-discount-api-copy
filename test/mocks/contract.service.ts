@@ -146,6 +146,10 @@ export class MockOfferContract {
         return BigInt(this._getOwned(address).length);
     }
 
+    async ownerOf(tokenId: bigint): Promise<string> {
+        return MockOfferContract.owners.get(tokenId) ?? ZeroAddress;
+    }
+
     async tokenOfOwnerByIndex(address: string, index: bigint) {
         if (index >= await this.balanceOf(address)) throw new Error("Index outside range");
         return this._getOwned(address)[Number(index)][0];

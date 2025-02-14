@@ -3,7 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { Contract, EventLog, id, TransactionReceipt, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { IDestination, ISource, MimeType, toAdminString } from "../../common.types";
+import { formatTokenId, IDestination, ISource, MimeType, toAdminString } from "../../common.types";
 import { InsufficientBalanceError, NotApprovedError, OfferTokenIdError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { User } from "../../entities/user.entity";
@@ -40,7 +40,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
     public async getMetadata(offerType: number, offerInstance: number, detailed?: boolean): Promise<Metadata> {
         const [template, overriden] = await this.getWithFallback(this._templateRepository, offerType, offerInstance);
         // !! return additonalInfo
-        return template?.metadata ? { ...template.metadata, ...(detailed && { usesDefault: !overriden }) } : null;
+        return template?.metadata ? { ...template.metadata, ...(detailed && { usesDefault: !overriden }) } : undefined;
     }
 
     public async getImage(offerType: number, offerInstance: number): Promise<OfferImage> {
@@ -66,7 +66,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
 
     public async create(to: IDestination, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransfer> {
         const [toAddress, toWallet] = await this.parseDestination(to);
-        this._logger.verbose(`Mint offer type: ${offerType} to: ${toAddress} spent: ${amount} tokens`);
+        this._logger.verbose(`Mint offer type: ${offerType}, to: ${toAddress}, spent: ${amount} tokens`);
         const adminWallet = this._walletService.getAdminWallet();
         const adminToken = await this._contractService.tokenContract(adminWallet);
         const adminOffer = await this._contractService.offerContract(adminWallet);
@@ -95,20 +95,43 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         return this.lockTransfer(async () => {
             const txOfferReceipt: TransactionReceipt = await txOffer.wait();
             // !! need to check receipt status to check mined
-            const tokenId = (txOfferReceipt.logs.find(l => l.topics[0] === TRANSFER_TOPIC) as EventLog)?.args[2];
+            const tokenId: bigint = (txOfferReceipt.logs.find(l => l.topics[0] === TRANSFER_TOPIC) as EventLog)?.args[2];
             if (!tokenId) {
                 throw new OfferTokenIdError("Failed to read token identifier from event");
             }
+            this._logger.verbose(`Minted offer: ${formatTokenId(tokenId)}`);
             return this.saveTransfer(ZeroAddress, toAddress, tokenId, txOfferReceipt.blockNumber, txOfferReceipt.hash, additionalInfo);
         });
     }
 
+    public async activate(userId: string, tokenId: bigint): Promise<RawTransfer> {
+        const wallet = await this._userService.getUserWallet(userId);
+        const offer = await this._contractService.offerContract(wallet);
+
+        const owner = await offer.ownerOf(tokenId);
+        if (owner !== wallet.address) {
+            throw new InsufficientBalanceError(`User ${userId} is not the owner of offer: ${formatTokenId(tokenId)}`);
+        }
+
+        await this._walletService.gasWallet(wallet);
+        const tx = await offer.burn(tokenId);
+        return this.lockTransfer(async () => {
+            const txReceipt = await tx.wait();
+            return this.saveTransfer(wallet.address, ZeroAddress, tokenId, txReceipt.blockNumber, txReceipt.hash);
+        });
+    }
+
     public async transfer(from: ISource, to: IDestination, tokenId: bigint): Promise<RawTransfer> {
-        const [toAddress,] = await this.parseDestination(to);
-        this._logger.verbose(`Transfer offer: ${tokenId} from user: ${from.userId} to: ${toAddress} ${toAdminString(from)}`);
+        const [toAddress] = await this.parseDestination(to);
+        this._logger.verbose(`Transfer offer: ${formatTokenId(tokenId)} from user: ${from.userId}, to: ${toAddress} ${toAdminString(from)}`);
         const wallet = await this._userService.getUserWallet(from.userId);
         const offer = await this._contractService.offerContract(wallet);
         let tx;
+
+        const owner = await offer.ownerOf(tokenId);
+        if (owner !== wallet.address) {
+            throw new InsufficientBalanceError(`User ${from.userId} is not the owner of offer: ${formatTokenId(tokenId)}`);
+        }
 
         await this._walletService.gasWallet(wallet);
         if (from.asAdmin) {
@@ -123,16 +146,6 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         return this.lockTransfer(async () => {
             const txReceipt = await tx.wait();
             return this.saveTransfer(wallet.address, toAddress, tokenId, txReceipt.blockNumber, txReceipt.hash);
-        });
-    }
-
-    public async activate(userId: string, tokenId: bigint): Promise<RawTransfer> {
-        const wallet = await this._userService.getUserWallet(userId);
-        const offer = await this._contractService.offerContract(wallet);
-        const tx = await offer.burn(tokenId);
-        return this.lockTransfer(async () => {
-            const txReceipt = await tx.wait();
-            return this.saveTransfer(wallet.address, ZeroAddress, tokenId, txReceipt.blockNumber, txReceipt.hash);
         });
     }
 

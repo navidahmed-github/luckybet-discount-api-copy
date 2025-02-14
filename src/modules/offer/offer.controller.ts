@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiForbiddenResponse, ApiNoContentResponse, ApiOkRespons
 import { FileInterceptor } from "@nestjs/platform-express";
 import { createReadStream } from "fs";
 import { ProviderTokens } from "../../providerTokens";
-import { ApiQueryAddress, ApiQueryUserId, MimeType } from "../../common.types";
+import { ApiQueryAddress, ApiQueryUserId, formatTokenId, MimeType } from "../../common.types";
 import { OfferNotFoundError, OfferTokenIdError, UserMissingIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
@@ -95,8 +95,7 @@ export class OfferController {
     @ApiOkResponse({ description: "The offers were returned successfully" })
     async owned(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<string[]> {
         const dest = req.user.role === Role.Admin ? { userId, address } : { userId: req.user.id };
-        const offers = await this._offerService.getOffers(dest);
-        return offers.map(o => `0x${o.toString(16)}`);
+        return this._offerService.getOffers(dest).then(o => o.map(formatTokenId));
     }
 
     @Get("history")

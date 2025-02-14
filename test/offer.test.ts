@@ -4,6 +4,7 @@ import { getRepositoryToken } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Contract, Wallet, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../src/providerTokens";
+import { formatTokenId, MimeType } from "../src/common.types";
 import { InsufficientBalanceError, NotApprovedError } from "../src/error.types";
 import { Transfer } from "../src/entities/transfer.entity";
 import { Template } from "../src/entities/template.entity";
@@ -33,10 +34,6 @@ describe("Offers", () => {
 
     function getTokenId(tokenType: number, tokenInstance: number): bigint {
         return (BigInt(tokenType) << 128n) + BigInt(tokenInstance);
-    }
-
-    function formatTokenId(tokenId: bigint) {
-        return `0x${tokenId.toString(16)}`
     }
 
     beforeEach(async () => {
@@ -138,6 +135,10 @@ describe("Offers", () => {
             "0x100000000000000000000000000000001",
             "0x100000000000000000000000000000002",
             "0x300000000000000000000000000000002"]);
+        expect(await offerContract.ownerOf(getTokenId(1, 1))).toEqual(users[0].address);
+        expect(await offerContract.ownerOf(getTokenId(1, 2))).toEqual(users[0].address);
+        expect(await offerContract.ownerOf(getTokenId(3, 1))).toEqual(users[1].address);
+        expect(await offerContract.ownerOf(getTokenId(3, 2))).toEqual(users[0].address);
         expect(transferRepository.save).toHaveBeenCalledTimes(4);
         const expected = { fromAddress: ZeroAddress, toAddress: users[0].address, offer: { tokenId: formatTokenId(getTokenId(3, 2)) } };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
@@ -146,18 +147,19 @@ describe("Offers", () => {
 
     it("Should mint offer with tokens to a user", async () => {
         await expect(offerService.create({ userId: users[0].userId }, 3, 100n, "More details")).rejects.toThrow(InsufficientBalanceError);
+        const tokenId = getTokenId(3, 1);
 
         const walletService = testModule.get<IWalletService>(ProviderTokens.WalletService);
         const adminTokenContract = await contractService.tokenContract(walletService.getAdminWallet());
         await adminTokenContract.mint(users[0].address, 100n);
 
         const rawTransfer = await offerService.create({ userId: users[0].userId }, 3, 100n, "More details");
-
+        expect(await offerContract.ownerOf(tokenId)).toEqual(users[0].address);
         expect(transferRepository.save).toHaveBeenCalledTimes(1);
         const expected = {
             fromAddress: ZeroAddress,
             toAddress: users[0].address,
-            offer: { tokenId: formatTokenId(getTokenId(3, 1)), additionalInfo: "More details" }
+            offer: { tokenId: formatTokenId(tokenId), additionalInfo: "More details" }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
@@ -167,6 +169,7 @@ describe("Offers", () => {
         const wallet = new Wallet(Wallet.createRandom().privateKey);
 
         await expect(offerService.create({ address: wallet.address }, 3, 100n)).rejects.toThrow(InsufficientBalanceError);
+        const tokenId = getTokenId(3, 1);
 
         const walletService = testModule.get<IWalletService>(ProviderTokens.WalletService);
         const adminWallet = walletService.getAdminWallet();
@@ -177,61 +180,119 @@ describe("Offers", () => {
 
         const token = await contractService.tokenContract(wallet);
         await token.approve(adminWallet.address, 100n);
-
         const rawTransfer = await offerService.create({ address: wallet.address }, 3, 100n);
-
+        expect(await offerContract.ownerOf(tokenId)).toEqual(wallet.address);
         expect(transferRepository.save).toHaveBeenCalledTimes(1);
         const expected = {
             fromAddress: ZeroAddress,
             toAddress: wallet.address,
-            offer: { tokenId: formatTokenId(getTokenId(3, 1)) }
+            offer: { tokenId: formatTokenId(tokenId) }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 
-    /* !!
-        it("Should burn tokens", async () => {
-            const walletService = testModule.get<IWalletService>(ProviderTokens.WalletService);
-            const luckyBetAddress = walletService.getLuckyBetWallet().address;
-    
-            await tokenService.create(luckyBetAddress, 500n);
-    
-            await expect(tokenService.destroy(600n)).rejects.toThrow(InsufficientBalanceError);
-    
-            await tokenService.destroy(300n);
-            expect((await tokenContract.balanceOf(luckyBetAddress)).toString()).toEqual("200");
-            expect(transferRepository.save).toHaveBeenCalledTimes(2);
-            expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining({
-                fromAddress: luckyBetAddress, toAddress: ZeroAddress, token: { amount: "300" }
-            }));
-        });
-    
-        it("Should transfer tokens", async () => {
-            await tokenService.create(users[0].address, 500n);
-    
-            await expect(tokenService.transfer(users[0].id, users[1].address, 600n, false)).rejects.toThrow(InsufficientBalanceError);
-    
-            let rawTransfer = await tokenService.transfer(users[0].id, users[1].address, 400n, false);
-            expect((await tokenService.getBalance(users[0].id)).toString()).toEqual("100");
-            expect((await tokenService.getBalance(users[1].id)).toString()).toEqual("400");
-            let expected = { fromAddress: users[0].address, toAddress: users[1].address, token: { amount: "400" } };
-            expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
-            expect(rawTransfer).toEqual(expect.objectContaining(expected));
-    
-            rawTransfer = await tokenService.transfer(users[1].id, TEST_ADDRESS, 100n, false);
-            expect((await tokenService.getBalance(users[1].id)).toString()).toEqual("300");
-            expect((await tokenContract.balanceOf(TEST_ADDRESS)).toString()).toEqual("100");
-            expected = { fromAddress: users[1].address, toAddress: TEST_ADDRESS, token: { amount: "100" } };
-            expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
-            expect(rawTransfer).toEqual(expect.objectContaining(expected));
-    
-            rawTransfer = await tokenService.transfer(users[1].id, users[0].address, 140n, true);
-            expect((await tokenService.getBalance(users[0].id)).toString()).toEqual("240");
-            expect((await tokenService.getBalance(users[1].id)).toString()).toEqual("160");
-            expected = { fromAddress: users[1].address, toAddress: users[0].address, token: { amount: "140" } };
-            expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
-            expect(rawTransfer).toEqual(expect.objectContaining(expected));
-        });
-        */
+    it("Should active offer", async () => {
+        await offerService.create({ address: users[0].address }, 3, 0n);
+        const tokenId = getTokenId(3, 1);
+        expect(await offerContract.ownerOf(tokenId)).toEqual(users[0].address);
+
+        await expect(offerService.activate(users[1].userId, tokenId)).rejects.toThrow(InsufficientBalanceError);
+
+        const rawTransfer = await offerService.activate(users[0].userId, tokenId);
+        expect(await offerContract.ownerOf(tokenId)).toEqual(ZeroAddress);
+        expect(transferRepository.save).toHaveBeenCalledTimes(2);
+        const expected = {
+            fromAddress: users[0].address,
+            toAddress: ZeroAddress,
+            offer: { tokenId: formatTokenId(tokenId) }
+        };
+        expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+        expect(rawTransfer).toEqual(expect.objectContaining(expected));
+    });
+
+    it("Should transfer offers", async () => {
+        await offerService.create({ address: users[0].address }, 3, 0n);
+        const tokenId = getTokenId(3, 1);
+
+        await expect(offerService.transfer({ userId: users[2].userId }, { address: users[1].address }, tokenId))
+            .rejects.toThrow(InsufficientBalanceError);
+
+        let rawTransfer = await offerService.transfer({ userId: users[0].userId }, { address: users[1].address }, tokenId);
+        expect((await offerService.getOffers({ userId: users[0].userId })).length).toEqual(0);
+        expect(formatTokenId((await offerService.getOffers({ userId: users[1].userId }))[0])).toEqual("0x300000000000000000000000000000001");
+        let expected = {
+            fromAddress: users[0].address,
+            toAddress: users[1].address,
+            offer: { tokenId: formatTokenId(tokenId) }
+        };
+        expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+        expect(rawTransfer).toEqual(expect.objectContaining(expected));
+
+        rawTransfer = await offerService.transfer({ userId: users[1].userId, asAdmin: true }, { userId: users[2].userId }, tokenId);
+        expect((await offerService.getOffers({ userId: users[1].userId })).length).toEqual(0);
+        expect(formatTokenId((await offerService.getOffers({ userId: users[2].userId }))[0])).toEqual("0x300000000000000000000000000000001");
+        expected = {
+            fromAddress: users[1].address,
+            toAddress: users[2].address,
+            offer: { tokenId: formatTokenId(tokenId) }
+        };
+        expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+        expect(rawTransfer).toEqual(expect.objectContaining(expected));
+
+        rawTransfer = await offerService.transfer({ userId: users[2].userId }, { address: TEST_ADDRESS }, tokenId);
+        expect((await offerService.getOffers({ userId: users[1].userId })).length).toEqual(0);
+        expect(await offerContract.ownerOf(tokenId)).toEqual(TEST_ADDRESS);
+        expected = {
+            fromAddress: users[2].address,
+            toAddress: TEST_ADDRESS,
+            offer: { tokenId: formatTokenId(tokenId) }
+        };
+        expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+        expect(rawTransfer).toEqual(expect.objectContaining(expected));
+    });
+
+    it("Should manage offer template", async () => {
+        const offer = {
+            name: "10% Discount",
+            description: "10% of your next bet on the horses",
+            attributes: [{ "trait_type": "discount_percent", value: 10 }, { "trait_type": "valid", value: "horses" }]
+        };
+        const enhancedOffer = {
+            name: "10% Discount (Enhanced)",
+            description: "10% of your next bet on any event",
+            attributes: [{ "trait_type": "discount_percent", value: 10 }, { "trait_type": "valid", value: "all" }]
+        }
+        await offerService.createTemplate(3, offer);
+        await offerService.createTemplate(3, enhancedOffer, 4);
+        expect(await offerService.getMetadata(1, 1)).toBeUndefined();
+        expect(await offerService.getMetadata(3, 1, true)).toStrictEqual({ ...offer, usesDefault: true });
+        expect(await offerService.getMetadata(3, 4, true)).toStrictEqual({ ...enhancedOffer, usesDefault: false });
+
+        await offerService.deleteTemplate(3, 4);
+        expect(await offerService.getMetadata(3, 4, true)).toStrictEqual({ ...offer, usesDefault: true });
+
+        await offerService.deleteTemplate(3);
+        expect(await offerService.getMetadata(3, 1, true)).toBeUndefined();
+    });
+
+    it("Should manage offer images", async () => {
+        await offerService.uploadImage(3, MimeType.JPG, Buffer.from([5, 6, 7, 8]));
+        await offerService.uploadImage(3, MimeType.GIF, Buffer.from([1, 2, 3, 4]), 4);
+        expect(await offerService.getImage(1, 1)).toBeUndefined();
+        let image = await offerService.getImage(3, 1);
+        expect(image.format).toEqual(MimeType.JPG);
+        expect(image.data.toString('hex')).toEqual("05060708");
+        image = await offerService.getImage(3, 4);
+        expect(image.format).toEqual(MimeType.GIF);
+        expect(image.data.toString('hex')).toEqual("01020304");
+
+        await offerService.deleteImage(3, 4);
+        image = await offerService.getImage(3, 4);
+        expect(image.format).toEqual(MimeType.JPG);
+        expect(image.data.toString('hex')).toEqual("05060708");
+
+        await offerService.deleteImage(3);
+        expect(await offerService.getImage(3, 1)).toBeUndefined();
+    });
 });

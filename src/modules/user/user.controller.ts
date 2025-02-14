@@ -23,7 +23,7 @@ export class UserController {
 		isArray: true,
 	})
 	async all(): Promise<UserDTO[]> {
-		return this._userService.getAll().then(u => u.map(User.toDTO));
+		return this._userService.getAll().then(u => u.map(this.toDTO));
 	}
 
 	@Get("me")
@@ -35,7 +35,7 @@ export class UserController {
 	})
 	@ApiNotFoundResponse({ description: "User could not be found" })
 	async me(@Request() req): Promise<UserDTO> {
-		return this._userService.getByUserId(req.user.id).then(User.toDTO);
+		return this._userService.getByUserId(req.user.id).then(this.toDTO);
 	}
 
 	@Get(":userId")
@@ -54,7 +54,7 @@ export class UserController {
 	@ApiNotFoundResponse({ description: "User could not be found" })
 	@ApiBadRequestResponse({ description: "User identifier is missing" })
 	async byId(@Param("userId") userId: string): Promise<UserDTO> {
-		return this._userService.getByUserId(userId).then(User.toDTO);
+		return this._userService.getByUserId(userId).then(this.toDTO);
 	}
 
 	@Post()
@@ -68,6 +68,10 @@ export class UserController {
 	@ApiInternalServerErrorResponse({ description: "User could not be saved" })
 	@HttpCode(HttpStatus.CREATED)
 	async create(@Body() createUserCommand: CreateUserCommand): Promise<UserDTO> {
-		return this._userService.create(createUserCommand.id).then(User.toDTO);
+		return this._userService.create(createUserCommand.id).then(this.toDTO);
+	}
+	
+	private toDTO(user: User): UserDTO {
+		return { id: user.userId, address: user.address };
 	}
 }
