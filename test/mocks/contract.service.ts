@@ -1,6 +1,6 @@
 import { Contract, keccak256, Log, TransactionReceipt, TransactionResponse, Wallet, ZeroAddress } from "ethers";
 import { IContractService } from "../../src/services/contract.service";
-import { TRANSFER_TOPIC } from "../../src/modules/offers/offer.service";
+import { TRANSFER_TOPIC } from "../../src/modules/offer/offer.service";
 
 export class MockContractService implements IContractService {
     public reset() {
