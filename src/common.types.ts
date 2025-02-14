@@ -55,6 +55,32 @@ export class DestinationErrorDTO extends DestinationDTO {
     reason: string;
 }
 
+export class HistoryDTO {
+    @ApiProperty({
+        description: "Type of transfer",
+        enum: TransferType,
+    })
+    type: TransferType;
+
+    @ApiProperty({
+        description: "Address of wallet that token was transferred to/from",
+        type: String,
+    })
+    otherAddress?: string;
+
+    @ApiProperty({
+        description: "Identifier of user that token was transferred to/from",
+        type: String,
+    })
+    otherUser?: string;
+
+    @ApiProperty({
+        description: "Timestamp when the transfer occurred",
+        type: Number,
+    })
+    timestamp: number;
+}
+
 export const ApiQueryUserId = (description: string, required: boolean = false) => ApiQuery({
     name: "userId",
     description,

@@ -12,7 +12,7 @@ export class Metadata {
 	attributes: object;
 }
 
-@Entity("template")
+@Entity("templates")
 export class Template {
 	@ObjectIdColumn()
 	id: ObjectId;

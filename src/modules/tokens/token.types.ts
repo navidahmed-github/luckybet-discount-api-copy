@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
-import { DestinationDTO, DestinationErrorDTO, IDestination, ISource, OperationStatus, TransferType } from "../../common.types";
+import { DestinationDTO, DestinationErrorDTO, HistoryDTO, IDestination, ISource, OperationStatus, TransferType } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 
 export class AirdropCommand {
@@ -55,36 +55,12 @@ export class TokenBalanceDTO {
     balance: string;
 }
 
-export class TokenHistoryDTO {
-    @ApiProperty({
-        description: "Type of transfer",
-        enum: TransferType,
-    })
-    type: TransferType;
-
-    @ApiProperty({
-        description: "Address of wallet that token was transferred to/from",
-        type: String,
-    })
-    otherAddress?: string;
-
-    @ApiProperty({
-        description: "Identifier of user that token was transferred to/from",
-        type: String,
-    })
-    otherUser?: string;
-
+export class TokenHistoryDTO extends HistoryDTO {
     @ApiProperty({
         description: "Amount of tokens transferred",
         type: String,
     })
     amount: string;
-
-    @ApiProperty({
-        description: "Timestamp when the transfer occurred",
-        type: Number,
-    })
-    timestamp: number;
 }
 
 export class TokenTransferDTO {

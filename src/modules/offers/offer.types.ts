@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
-import { DestinationDTO, IDestination, ISource, MimeType, TransferType } from "../../common.types";
+import { DestinationDTO, HistoryDTO, IDestination, ISource, MimeType } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { Metadata } from "../../entities/template.entity";
 import { OfferImage } from "../../entities/image.entity";
@@ -74,26 +74,7 @@ export class ActivateOfferCommand {
     tokenId: string;
 }
 
-export class OfferHistoryDTO {
-    @IsNotEmpty()
-    @ApiProperty({
-        description: "The type of transfer",
-        enum: TransferType,
-    })
-    type: TransferType;
-
-    @ApiProperty({
-        description: "Address of wallet that token was transferred to/from",
-        type: String,
-    })
-    otherAddress?: string;
-
-    @ApiProperty({
-        description: "Identifier of user that token was transferred to/from",
-        type: String,
-    })
-    otherUser?: string;
-
+export class OfferHistoryDTO extends HistoryDTO {
     @IsNotEmpty()
     @ApiProperty({
         description: "Offer transferred",
@@ -101,12 +82,11 @@ export class OfferHistoryDTO {
     })
     tokenId: string;
 
-    @IsNotEmpty()
     @ApiProperty({
-        description: "The timestamp when the transfer occurred",
-        type: Number,
+        description: "Additional information related to transaction",
+        type: String,
     })
-    time: number;
+    additionalInfo?: string;
 }
 
 export interface IOfferService {

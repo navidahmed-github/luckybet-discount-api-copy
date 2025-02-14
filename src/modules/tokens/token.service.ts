@@ -1,42 +1,28 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
-import { MongoBulkWriteError } from "mongodb";
-import { Contract, JsonRpcApiProvider, Log, Wallet, ZeroAddress } from "ethers";
+import { Contract, ZeroAddress } from "ethers";
 import { v4 as uuid_v4 } from 'uuid';
 import { ProviderTokens } from "../../providerTokens";
-import { IDestination, ISource, OperationStatus, TransferType } from "../../common.types";
-import { AirdropNotFoundError, DestinationInvalidError, InsufficientBalanceError, MONGO_DUPLICATE_KEY } from "../../error.types";
-import { RawTransfer, Transfer } from "../../entities/transfer.entity";
+import { IDestination, ISource, OperationStatus } from "../../common.types";
+import { AirdropNotFoundError, DestinationInvalidError, InsufficientBalanceError } from "../../error.types";
+import { RawTransfer } from "../../entities/transfer.entity";
 import { AirdropChunk } from "../../entities/airdrop.entity";
 import { User } from "../../entities/user.entity";
-import { IContractService } from "../../services/contract.service";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
-import { IUserService } from "../user/user.types";
 import { IJobService } from "../job/job.types";
 import { TokenHistoryDTO, ITokenService, AirdropStatus } from "./token.types";
+import { TransferService } from "../../services/transfer.service";
 
 const AIRDROP_MAX_MINT_PER_TX = 10;
 const AIRDROP_JOB_NAME = "airdropTask";
 
 @Injectable()
-export class TokenService implements ITokenService, OnApplicationBootstrap, OnModuleInit, OnModuleDestroy {
-    private readonly _logger = new Logger(TokenService.name);
-    private readonly _provider: JsonRpcApiProvider;
-    private readonly _userTableName: string;
-    private _disableListener: boolean;
-    private _tokenEvent: Contract;
-
+export class TokenService extends TransferService<TokenHistoryDTO> implements ITokenService, OnApplicationBootstrap {
     constructor(
-        @Inject(ProviderTokens.UserService)
-        private _userService: IUserService,
-
         @Inject(ProviderTokens.JobService)
         private _jobService: IJobService,
-
-        @Inject(ProviderTokens.ContractService)
-        private _contractService: IContractService,
 
         @Inject(ProviderTokens.WalletService)
         private _walletService: IWalletService,
@@ -44,35 +30,17 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
         @Inject(ProviderTokens.EthereumProviderService)
         ethereumProviderService: IProviderService,
 
-        @InjectRepository(Transfer)
-        private _transferRepository: MongoRepository<Transfer>,
-
-        @InjectRepository(AirdropChunk)
-        private _airdropRepository: MongoRepository<AirdropChunk>,
-
         @InjectRepository(User)
         userRepository: MongoRepository<User>,
-    ) {
-        this._userTableName = userRepository.metadata.tableName;
-        this._provider = ethereumProviderService.getProvider();
-    }
 
-    public async onModuleInit() {
-        this._disableListener = false;
-        this._tokenEvent = await this._contractService.tokenContract();
-        const currentBlock = await this._provider.getBlockNumber();
-        const evts = await this._tokenEvent.queryFilter("Transfer", Math.max(currentBlock - 10000, 0), currentBlock);
-        Promise.allSettled(evts.filter(evt => "args" in evt).map(async (evt) =>
-            this.saveTransfer(evt.args[0], evt.args[1], evt.args[2], evt.blockNumber, evt.transactionHash)));
-        this._tokenEvent.on("Transfer", this.transferListener);
+        @InjectRepository(AirdropChunk)
+        private _airdropRepository: MongoRepository<AirdropChunk>
+    ) {
+        super(new Logger(TokenService.name), ethereumProviderService, userRepository);
     }
 
     public async onApplicationBootstrap() {
         await this._jobService.define(AIRDROP_JOB_NAME, this.airdropProcessor);
-    }
-
-    public async onModuleDestroy() {
-        this._tokenEvent?.off("Transfer", this.transferListener);
     }
 
     public async getBalance(dest: IDestination): Promise<bigint> {
@@ -83,53 +51,7 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
     }
 
     public async getHistory(dest: IDestination): Promise<TokenHistoryDTO[]> {
-        const [address] = await this.parseDestination(dest);
-        this._logger.verbose(`Retrieving token history for address: ${address}`);
-        const lookupPipeline = (prefix: string) => {
-            return {
-                $lookup: {
-                    from: this._userTableName,
-                    localField: `${prefix}Address`,
-                    foreignField: "address",
-                    as: `${prefix}User`
-                }
-            }
-        };
-        const transfers = this._transferRepository.aggregate([
-            {
-                $match: {
-                    $and: [
-                        { token: { $exists: true } },
-                        { $or: [{ fromAddress: address }, { toAddress: address }] }
-                    ]
-                }
-            },
-            lookupPipeline("from"),
-            lookupPipeline("to"),
-            { $sort: { blockTimestamp: 1 } }
-        ]);
-        return (await transfers.toArray()).map(toHistory).filter(Boolean);
-
-        function toHistory(transfer: Transfer & { fromUser: User[], toUser: User[] }): TokenHistoryDTO | null {
-            let dto = null;
-            if (transfer.toAddress == address) {
-                const otherUser = transfer.fromUser.length ? { otherUser: transfer.fromUser[0].userId } : {};
-                dto = (transfer.fromAddress == ZeroAddress) ?
-                    { type: TransferType.Mint } :
-                    { type: TransferType.Receive, otherAddress: transfer.fromAddress, ...otherUser };
-            }
-            if (transfer.fromAddress == address) {
-                const otherUser = transfer.toUser.length ? { otherUser: transfer.toUser[0].userId } : {};
-                dto = (transfer.toAddress == ZeroAddress) ?
-                    { type: TransferType.Burn } :
-                    { type: TransferType.Send, otherAddress: transfer.toAddress, ...otherUser };
-            }
-            if (!dto) {
-                this._logger.error(`Failed to parse history record with txHash: ${transfer.txHash}`);
-                return null;
-            }
-            return { ...dto, amount: transfer.token.amount, timestamp: transfer.blockTimestamp };
-        }
+        return super.getHistory(dest, "token", t => t.token)
     }
 
     public async create(to: IDestination, amount: bigint): Promise<RawTransfer> {
@@ -304,51 +226,11 @@ export class TokenService implements ITokenService, OnApplicationBootstrap, OnMo
         }
     }
 
-    private transferListener = async (from: string, to: string, value: bigint, { log }: { log: Log }) => {
-        if (!this._disableListener) {
-            await this.saveTransfer(from, to, value, log.blockNumber, log.transactionHash);
-        }
+    protected async getContract(): Promise<Contract> {
+        return this._contractService.tokenContract();
     }
 
-    private async lockTransfer<T>(fn: () => Promise<T>): Promise<T> {
-        try {
-            this._disableListener = true;
-            return await fn();
-        } finally {
-            this._disableListener = false;
-        }
+    protected addTransferData(transfer: Omit<RawTransfer, "token" | "offer">, value: bigint, _args: any[]): RawTransfer {
+        return { ...transfer, token: { amount: value.toString() } };
     }
-
-    private async saveTransfer(
-        fromAddress: string,
-        toAddress: string,
-        amount: bigint,
-        blockNumber: number,
-        txHash: string
-    ): Promise<RawTransfer> {
-        const transfer = { fromAddress, toAddress, blockNumber, txHash, token: { amount: amount.toString() } };
-        try {
-            if (!await this._transferRepository.findOne({ where: { txHash } })) {
-                const blockTimestamp = (await this._provider.getBlock(blockNumber)).timestamp;
-                return await this._transferRepository.save({ ...transfer, blockTimestamp });
-            }
-        } catch (err) {
-            if (!(err instanceof MongoBulkWriteError && err.code == MONGO_DUPLICATE_KEY)) // ignore if already exists
-                this._logger.error(`Failed to write transfer with txHash: ${txHash}, reason: ${err.messsage}`, err.stack);
-        }
-        return transfer;
-    }
-
-    private async parseDestination(to: IDestination): Promise<[string, Wallet?]> {
-        if (to.userId) {
-            if (to.address)
-                throw new DestinationInvalidError("Cannot provide both user and address as destination");
-            const wallet = await this._userService.getUserWallet(to.userId);
-            return [wallet.address, wallet];
-        }
-        if (!to.address)
-            throw new DestinationInvalidError("No destination provided");
-        return [to.address, null];
-    }
-
 }
