@@ -2,7 +2,7 @@ import { Inject, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
-import { Contract, JsonRpcApiProvider, Log, Wallet, ZeroAddress } from "ethers";
+import { Contract, isAddress, JsonRpcApiProvider, Log, Wallet, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../providerTokens";
 import { HistoryDTO, IDestination, TransferType } from "../common.types";
 import { DestinationInvalidError, MONGO_DUPLICATE_KEY } from "../error.types";
@@ -112,6 +112,8 @@ export class TransferService<T extends HistoryDTO> implements OnModuleInit, OnMo
         }
         if (!to.address)
             throw new DestinationInvalidError("No destination provided");
+        if (!isAddress(to.address))
+            throw new DestinationInvalidError(`Not a valid Ethereum address: ${to.address}`);
         return [to.address, null];
     }
 

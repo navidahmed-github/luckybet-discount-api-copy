@@ -71,8 +71,7 @@ export class WalletService implements IWalletService {
 
 	private async sendEther(to: string, amount: bigint): Promise<void> {
 		const tx = await this._gasStationWallet.sendTransaction({ to, value: amount });
-// !!		this._logger.debug(`Transferring ETH: ${tx.hash} (nonce: ${tx.nonce})`);
 		const txReceipt = await tx.wait();
-// !!		this._logger.debug(`Transferred ETH: ${txReceipt.transactionHash} (block ${txReceipt.blockNumber} used ${txReceipt.gasUsed} gas)`);
+		this._logger.verbose(`Sent ETH to: ${to} from gas station for amount: ${amount} with txHash: ${txReceipt.hash}`);
 	}
 }

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Pos
 import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiInternalServerErrorResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam } from "@nestjs/swagger";
 import { ProviderTokens } from "../../providerTokens";
 import { ApiQueryAddress, ApiQueryUserId } from "../../common.types";
+import { UserMissingIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, AirdropCommand, AirdropResponse, AirdropStatus, CreateTokenCommand } from "./token.types";
@@ -86,8 +87,11 @@ export class TokenController {
     @ApiBadRequestResponse({ description: "Invalid destination format" })
     @ApiInternalServerErrorResponse({ description: "Failed to transfer tokens" })
     async transfer(@Request() req, @Body() cmd: TransferTokenCommand): Promise<TokenTransferDTO> {
-        const asAdmin = req.user.role === Role.Admin;
-        const userId = (asAdmin && cmd.fromUserId) || req.user.id;
+        const asAdmin = req.user.role === Role.Admin ? req.user.id : undefined;
+        const userId = asAdmin ? cmd.fromUserId : req.user.id;
+        if (!userId) {
+            throw new UserMissingIdError();
+        }
         const rawTransfer = await this._tokenService.transfer({ userId, asAdmin }, cmd.to, BigInt(cmd.amount));
         return { ...rawTransfer, amount: rawTransfer.token.amount };
     }

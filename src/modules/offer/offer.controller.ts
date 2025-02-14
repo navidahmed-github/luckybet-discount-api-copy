@@ -4,7 +4,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { createReadStream } from "fs";
 import { ProviderTokens } from "../../providerTokens";
 import { ApiQueryAddress, ApiQueryUserId, MimeType } from "../../common.types";
-import { OfferNotFoundError, OfferTokenIdError } from "../../error.types";
+import { OfferNotFoundError, OfferTokenIdError, UserMissingIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { RawTransfer } from "../../entities/transfer.entity";
@@ -130,8 +130,11 @@ export class OfferController {
     @ApiOperation({ summary: "Transfer offers to another user" })
     @ApiOkResponse({ description: "The offer was transferred successfully" })
     async transfer(@Request() req, @Body() cmd: TransferOfferCommand): Promise<RawTransfer> {
-        const asAdmin = req.user.role === Role.Admin;
-        const userId = (asAdmin && cmd.fromUserId) || req.user.id;
+        const asAdmin = req.user.role === Role.Admin ? req.user.id : undefined;
+        const userId = asAdmin ? cmd.fromUserId : req.user.id;
+        if (!userId) {
+            throw new UserMissingIdError();
+        }
         return this._offerService.transfer({ userId, asAdmin }, cmd.to, BigInt(cmd.tokenId));
     }
 

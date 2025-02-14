@@ -1,11 +1,11 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
-import { Contract, ZeroAddress } from "ethers";
+import { Contract, isAddress, ZeroAddress } from "ethers";
 import { v4 as uuid_v4 } from 'uuid';
 import { ProviderTokens } from "../../providerTokens";
-import { IDestination, ISource, OperationStatus } from "../../common.types";
-import { AirdropNotFoundError, DestinationInvalidError, InsufficientBalanceError } from "../../error.types";
+import { IDestination, ISource, OperationStatus, toAdminString } from "../../common.types";
+import { AirdropCannotCreateError, AirdropNotFoundError, DestinationInvalidError, InsufficientBalanceError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { AirdropChunk } from "../../entities/airdrop.entity";
 import { User } from "../../entities/user.entity";
@@ -86,7 +86,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
 
     public async transfer(from: ISource, to: IDestination, amount: bigint): Promise<RawTransfer> {
         const [toAddress] = await this.parseDestination(to);
-        this._logger.verbose(`Transfer tokens from user: ${from.userId} to: ${toAddress} amount: ${amount}`);
+        this._logger.verbose(`Transfer tokens from user: ${from.userId} to: ${toAddress} amount: ${amount} ${toAdminString(from)}`);
         const wallet = await this._userService.getUserWallet(from.userId);
         const token = await this._contractService.tokenContract(wallet);
         let tx;
@@ -119,12 +119,16 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         if (destinations.some(d => d.address && d.userId)) {
             throw new DestinationInvalidError("Cannot provide both user and address as destination");
         }
-        if (destinations.some(d => !d.address && !d.userId)) { // !! should check valid Ethereum address
+        if (destinations.some(d => !d.address && !d.userId)) {
             throw new DestinationInvalidError("A user or valid address is required as a destination");
+        }
+        const invalidFormat = destinations.filter(d => d.address).find(d => !isAddress(d.address));
+        if (invalidFormat) {
+            throw new DestinationInvalidError(`Not a valid Ethereum address: ${invalidFormat.address}`)
         }
 
         const users = await this._userService.getAll();
-        const addressMap = new Map(users.map(u => [u.id, u.address]));
+        const addressMap = new Map(users.map(u => [u.userId, u.address]));
         const [valid, invalid] = destinations
             .map(d => d.userId ? { ...destinations, address: d ?? addressMap.get(d.userId) } : d)
             .reduce(([v, i], curr) => curr.address ? [[...v, curr], i] : [v, [...i, curr]], [[], []]);
@@ -152,10 +156,10 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
             await this._jobService.run(AIRDROP_JOB_NAME, requestId);
             return requestId;
         } catch (err) {
-            // operation has failed therefore make best attempt to delete all chunks
             // !! test this
+            // operation has failed therefore make best attempt to delete all chunks
             await this._airdropRepository.delete({ requestId }).catch(_ => this._logger.error(`Deleting airdrop records failed for request: ${requestId}`));
-            throw new Error(); // !!
+            throw new AirdropCannotCreateError(err.message);
         }
     }
 

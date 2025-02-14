@@ -9,7 +9,7 @@ import { Transfer } from "../src/entities/transfer.entity";
 import { AirdropChunk } from "../src/entities/airdrop.entity";
 import { User } from "../src/entities/user.entity";
 import { ITokenService } from "../src/modules/token/token.types";
-import { IUserService, UserDTO } from "../src/modules/user/user.types";
+import { IUserService } from "../src/modules/user/user.types";
 import { UserService } from "../src/modules/user/user.service";
 import { TokenService } from "../src/modules/token/token.service";
 import { IWalletService, WalletService, WalletServiceSettingKeys } from "../src/services/wallet.service";
@@ -29,7 +29,7 @@ describe("Tokens", () => {
     let tokenService: ITokenService;
     let tokenContract: Contract;
     let transferRepository: Repository<Transfer>
-    let users: UserDTO[];
+    let users: User[];
 
     beforeEach(async () => {
         testModule = await Test.createTestingModule({
@@ -124,7 +124,7 @@ describe("Tokens", () => {
         await tokenService.create({ address: users[1].address }, 300n);
         const rawTransfer = await tokenService.create({ address: users[0].address }, 400n);
 
-        const balances = await Promise.all(users.map(async u => tokenService.getBalance({ userId: u.id })));
+        const balances = await Promise.all(users.map(async u => tokenService.getBalance({ userId: u.userId })));
         expect(balances.map(b => b.toString())).toEqual(["900", "300", "0"]);
         expect(transferRepository.save).toHaveBeenCalledTimes(3);
         const expected = { fromAddress: ZeroAddress, toAddress: users[0].address, token: { amount: "400" } };
@@ -151,25 +151,25 @@ describe("Tokens", () => {
     it("Should transfer tokens", async () => {
         await tokenService.create({ address: users[0].address }, 500n);
 
-        await expect(tokenService.transfer({ userId: users[0].id }, { address: users[1].address }, 600n)).rejects.toThrow(InsufficientBalanceError);
+        await expect(tokenService.transfer({ userId: users[0].userId }, { address: users[1].address }, 600n)).rejects.toThrow(InsufficientBalanceError);
 
-        let rawTransfer = await tokenService.transfer({ userId: users[0].id }, { address: users[1].address }, 400n);
-        expect((await tokenService.getBalance({ userId: users[0].id })).toString()).toEqual("100");
-        expect((await tokenService.getBalance({ userId: users[1].id })).toString()).toEqual("400");
+        let rawTransfer = await tokenService.transfer({ userId: users[0].userId }, { address: users[1].address }, 400n);
+        expect((await tokenService.getBalance({ userId: users[0].userId })).toString()).toEqual("100");
+        expect((await tokenService.getBalance({ userId: users[1].userId })).toString()).toEqual("400");
         let expected = { fromAddress: users[0].address, toAddress: users[1].address, token: { amount: "400" } };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
 
-        rawTransfer = await tokenService.transfer({ userId: users[1].id }, { address: TEST_ADDRESS }, 100n);
+        rawTransfer = await tokenService.transfer({ userId: users[1].userId }, { address: TEST_ADDRESS }, 100n);
         expect((await tokenService.getBalance({ address: users[1].address })).toString()).toEqual("300");
         expect((await tokenContract.balanceOf(TEST_ADDRESS)).toString()).toEqual("100");
         expected = { fromAddress: users[1].address, toAddress: TEST_ADDRESS, token: { amount: "100" } };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
 
-        rawTransfer = await tokenService.transfer({ userId: users[1].id, asAdmin: true }, { userId: users[0].id }, 140n);
-        expect((await tokenService.getBalance({ userId: users[0].id })).toString()).toEqual("240");
-        expect((await tokenService.getBalance({ userId: users[1].id })).toString()).toEqual("160");
+        rawTransfer = await tokenService.transfer({ userId: users[1].userId, asAdmin: true }, { userId: users[0].userId }, 140n);
+        expect((await tokenService.getBalance({ userId: users[0].userId })).toString()).toEqual("240");
+        expect((await tokenService.getBalance({ userId: users[1].userId })).toString()).toEqual("160");
         expected = { fromAddress: users[1].address, toAddress: users[0].address, token: { amount: "140" } };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
         expect(rawTransfer).toEqual(expect.objectContaining(expected));

@@ -30,6 +30,10 @@ export interface IDestination {
     address?: string;
 }
 
+export function toAdminString(from: ISource) {
+    return from.asAdmin ? `as admin: ${from.asAdmin}` : "";
+}
+
 export class DestinationDTO implements IDestination {
     @ApiProperty({
         description: "Identifier of user to transfer to (address should not be set if used)",

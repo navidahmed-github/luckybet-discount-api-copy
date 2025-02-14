@@ -3,6 +3,7 @@ import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiInternalSe
 import { ProviderTokens } from "../../providerTokens";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
+import { User } from "../../entities/user.entity";
 import { CreateUserCommand, IUserService, UserDTO } from "./user.types";
 
 @Controller("users")
@@ -22,7 +23,7 @@ export class UserController {
 		isArray: true,
 	})
 	async all(): Promise<UserDTO[]> {
-		return this._userService.getAll();
+		return this._userService.getAll().then(u => u.map(User.toDTO));
 	}
 
 	@Get("me")
@@ -34,7 +35,7 @@ export class UserController {
 	})
 	@ApiNotFoundResponse({ description: "User could not be found" })
 	async me(@Request() req): Promise<UserDTO> {
-		return this._userService.getById(req.user.id);
+		return this._userService.getByUserId(req.user.id).then(User.toDTO);
 	}
 
 	@Get(":userId")
@@ -53,7 +54,7 @@ export class UserController {
 	@ApiNotFoundResponse({ description: "User could not be found" })
 	@ApiBadRequestResponse({ description: "User identifier is missing" })
 	async byId(@Param("userId") userId: string): Promise<UserDTO> {
-		return this._userService.getById(userId);
+		return this._userService.getByUserId(userId).then(User.toDTO);
 	}
 
 	@Post()
@@ -67,6 +68,6 @@ export class UserController {
 	@ApiInternalServerErrorResponse({ description: "User could not be saved" })
 	@HttpCode(HttpStatus.CREATED)
 	async create(@Body() createUserCommand: CreateUserCommand): Promise<UserDTO> {
-		return this._userService.create(createUserCommand.id);
+		return this._userService.create(createUserCommand.id).then(User.toDTO);
 	}
 }

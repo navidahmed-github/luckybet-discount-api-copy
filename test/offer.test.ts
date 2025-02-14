@@ -9,7 +9,7 @@ import { Transfer } from "../src/entities/transfer.entity";
 import { Template } from "../src/entities/template.entity";
 import { OfferImage } from "../src/entities/image.entity";
 import { User } from "../src/entities/user.entity";
-import { IUserService, UserDTO } from "../src/modules/user/user.types";
+import { IUserService } from "../src/modules/user/user.types";
 import { IOfferService } from "../src/modules/offer/offer.types";
 import { UserService } from "../src/modules/user/user.service";
 import { OfferService } from "../src/modules/offer/offer.service";
@@ -29,7 +29,7 @@ describe("Offers", () => {
     let offerService: IOfferService;
     let offerContract: Contract;
     let transferRepository: Repository<Transfer>
-    let users: UserDTO[];
+    let users: User[];
 
     function getTokenId(tokenType: number, tokenInstance: number): bigint {
         return (BigInt(tokenType) << 128n) + BigInt(tokenInstance);
@@ -130,10 +130,10 @@ describe("Offers", () => {
     it("Should mint offers without tokens", async () => {
         await offerService.create({ address: users[0].address }, 1, 0n);
         await offerService.create({ address: users[1].address }, 3, 0n);
-        await offerService.create({ userId: users[0].id }, 1, 0n);
+        await offerService.create({ userId: users[0].userId }, 1, 0n);
         const rawTransfer = await offerService.create({ address: users[0].address }, 3, 0n);
 
-        const offers = await offerService.getOffers({ userId: users[0].id });
+        const offers = await offerService.getOffers({ userId: users[0].userId });
         expect(offers.map(formatTokenId)).toEqual([
             "0x100000000000000000000000000000001",
             "0x100000000000000000000000000000002",
@@ -145,13 +145,13 @@ describe("Offers", () => {
     });
 
     it("Should mint offer with tokens to a user", async () => {
-        await expect(offerService.create({ userId: users[0].id }, 3, 100n, "More details")).rejects.toThrow(InsufficientBalanceError);
+        await expect(offerService.create({ userId: users[0].userId }, 3, 100n, "More details")).rejects.toThrow(InsufficientBalanceError);
 
         const walletService = testModule.get<IWalletService>(ProviderTokens.WalletService);
         const adminTokenContract = await contractService.tokenContract(walletService.getAdminWallet());
         await adminTokenContract.mint(users[0].address, 100n);
 
-        const rawTransfer = await offerService.create({ userId: users[0].id }, 3, 100n, "More details");
+        const rawTransfer = await offerService.create({ userId: users[0].userId }, 3, 100n, "More details");
 
         expect(transferRepository.save).toHaveBeenCalledTimes(1);
         const expected = {

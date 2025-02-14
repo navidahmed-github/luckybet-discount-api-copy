@@ -72,13 +72,13 @@ describe("Users", () => {
 
         const users = await userService.getAll();
         expect(users.length).toBe(3);
-        expect(users[0].id).toBe("test-user1");
+        expect(users[0].userId).toBe("test-user1");
         expect(users[0].address).toBe("0x116B002A2593b9DD5a424ED81004A8F21BD6eEcd");
-        expect(users[1].id).toBe("test-user2");
-        expect(users[2].id).toBe("test-user3");
+        expect(users[1].userId).toBe("test-user2");
+        expect(users[2].userId).toBe("test-user3");
 
-        expect(await userService.getById("test-user3")).toEqual(users[2]);
-        await expect(userService.getById("test-user4")).rejects.toThrow(UserNotFoundError);
+        expect(await userService.getByUserId("test-user3")).toEqual(users[2]);
+        await expect(userService.getByUserId("test-user4")).rejects.toThrow(UserNotFoundError);
 
         const wallet = await userService.getUserWallet("test-user1");
         expect(wallet.address).toBe("0x116B002A2593b9DD5a424ED81004A8F21BD6eEcd");

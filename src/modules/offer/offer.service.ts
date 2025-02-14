@@ -3,7 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { Contract, EventLog, id, TransactionReceipt, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { IDestination, ISource, MimeType } from "../../common.types";
+import { IDestination, ISource, MimeType, toAdminString } from "../../common.types";
 import { InsufficientBalanceError, NotApprovedError, OfferTokenIdError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { User } from "../../entities/user.entity";
@@ -105,7 +105,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
 
     public async transfer(from: ISource, to: IDestination, tokenId: bigint): Promise<RawTransfer> {
         const [toAddress,] = await this.parseDestination(to);
-        this._logger.verbose(`Transfer offer: ${tokenId} from user: ${from.userId} to: ${toAddress}`);
+        this._logger.verbose(`Transfer offer: ${tokenId} from user: ${from.userId} to: ${toAddress} ${toAdminString(from)}`);
         const wallet = await this._userService.getUserWallet(from.userId);
         const offer = await this._contractService.offerContract(wallet);
         let tx;

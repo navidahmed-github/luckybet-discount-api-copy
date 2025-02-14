@@ -1,5 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Wallet } from "ethers";
+import { User } from "../../entities/user.entity";
 
 export class UserDTO {
 	@ApiProperty({
@@ -25,8 +26,8 @@ export class CreateUserCommand {
 }
 
 export interface IUserService {
-	getAll(): Promise<UserDTO[]>;
-	getById(userId: string): Promise<UserDTO>;
+	getAll(): Promise<User[]>;
+	getByUserId(userId: string): Promise<User>;
 	getUserWallet(userId: string): Promise<Wallet>;
-	create(userId: string): Promise<UserDTO>;
+	create(userId: string): Promise<User>;
 }

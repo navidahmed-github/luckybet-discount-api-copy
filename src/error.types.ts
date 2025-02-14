@@ -15,24 +15,9 @@ export class EntityCannotCreateError extends Error {
 	}
 }
 
-export abstract class EntityCannotGetError extends Error {
-	constructor(private entity: string, private entityId: string, msg: string) {
-		super(`Cannot get ${entity} ${entityId}: ${msg}`);
-		this.message = `Cannot get ${entity} ${entityId}: ${msg}`;
-		this.name = EntityCannotGetError.name;
-	}
-
-	get data(): unknown {
-		return {
-			entity: this.entity,
-			entityId: this.entityId,
-		};
-	}
-}
-
-export class EntityNotFoundError extends EntityCannotGetError {
+export class EntityNotFoundError extends Error {
 	constructor(entity: string, entityId: string) {
-		super(entity, entityId, `No ${entity} with ID: ${entityId}`);
+		super(`${entity} ID not found: ${entityId}`);
 		this.name = EntityNotFoundError.name;
 	}
 }
@@ -95,6 +80,13 @@ export class UserMismatchAddressError extends UserError {
 }
 
 //=== Token errors
+export class AirdropCannotCreateError extends EntityCannotCreateError {
+	constructor(id: string) {
+		super(EntityNames.Airdrop, id);
+		this.name = AirdropCannotCreateError.name;
+	}
+}
+
 export class AirdropNotFoundError extends EntityNotFoundError {
 	constructor(id: string) {
 		super(EntityNames.Airdrop, id);
