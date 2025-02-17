@@ -102,3 +102,9 @@ export function toAdminString(from: ISource) {
 export function formatTokenId(tokenId: bigint) {
     return `0x${tokenId.toString(16)}`
 }
+
+export function awaitSeconds(seconds: number) {
+    return new Promise<void>(resolve => {
+        setTimeout(() => resolve(), seconds * 1000);
+    });
+}
