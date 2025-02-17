@@ -98,6 +98,12 @@ export class MockTokenContract {
         return new MockTransactionRequest();
     }
 
+    async mintMany(tos: string[], amount: bigint): Promise<Partial<TransactionResponse>> {
+        if (!this.isAdmin) throw new Error("Requires administrator rights");
+        tos.forEach(to => this._updateBalance(to, amount));
+        return new MockTransactionRequest();
+    }
+
     async burn(amount: bigint): Promise<Partial<TransactionResponse>> {
         if (amount > await this.balanceOf(this.walletAddress)) throw new Error("Insufficient balance");
         this._updateBalance(this.walletAddress, -amount);

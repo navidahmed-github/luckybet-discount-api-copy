@@ -18,9 +18,16 @@ function makeMockRepository<T>(tableName: string): jest.Mocked<Repository<T>> {
 			const where = query?.where ?? {};
 			return this.data.find(d => Object.entries(where).every(([k, v]) => !v || d[k] == v));
 		}),
-		save: jest.fn(async function (_data: Partial<T>): Promise<T> {
-			this.data = [...this.data, { ..._data, id: uuid_v4() }];
-			return _data as T;
+		save: jest.fn(async function (data_: Partial<T>): Promise<T> {
+			this.data = [...this.data, { ...data_, id: uuid_v4() }];
+			return data_ as T;
+		}),
+		update: jest.fn(async function (id: string, data_: Partial<T>): Promise<T> {
+			const result = this.data.find(d => d.id == id);
+			if (result) {
+				Object.assign(result, { ...data_ }, id);
+			}
+			return result;
 		}),
 		delete: jest.fn(async function (id: string): Promise<void> {
 			this.data = this.data.filter(d => d.id != id);

@@ -2,8 +2,9 @@ import { ConfigService } from "@nestjs/config";
 import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { Contract, ZeroAddress } from "ethers";
+import { Contract, Wallet, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../src/providerTokens";
+import { awaitSeconds, IDestination, OperationStatus } from "../src/common.types";
 import { InsufficientBalanceError } from "../src/error.types";
 import { Transfer } from "../src/entities/transfer.entity";
 import { AirdropChunk } from "../src/entities/airdrop.entity";
@@ -14,7 +15,7 @@ import { UserService } from "../src/modules/user/user.service";
 import { TokenService } from "../src/modules/token/token.service";
 import { IWalletService, WalletService, WalletServiceSettingKeys } from "../src/services/wallet.service";
 import { IContractService } from "../src/services/contract.service";
-import { MockContractService } from "./mocks/contract.service";
+import { MockContractService, MockTokenContract } from "./mocks/contract.service";
 import { MockProviderService } from "./mocks/ethereumProvider.service";
 import { MockAtomicSequenceService } from "./mocks/atomicSequence.service";
 import { MockJobService } from "./mocks/job.service";
@@ -174,4 +175,54 @@ describe("Tokens", () => {
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
+
+    it("Should perform airdrop", async () => {
+        const airdropRepository: Repository<AirdropChunk> = testModule.get(getRepositoryToken(AirdropChunk));
+        const randomAddresses = Array.from({ length: 30 }, _ => ({ address: Wallet.createRandom().address }));
+        const destinations = users.map(u => ({ userId: u.userId }) as IDestination).concat(randomAddresses);
+        const destinationAddresses = users.map(u => u.address).concat(randomAddresses.map(a => a.address));
+
+        const requestId = await tokenService.airdrop(destinations, 50n);
+        const chunks = await airdropRepository.find();
+        expect(chunks.length).toEqual(4);
+        expect(chunks.every(c => c.requestId == requestId)).toBeTruthy();
+        expect(chunks.every(c => c.status == OperationStatus.Pending)).toBeTruthy();
+        expect(chunks.every(c => c.amount == "50")).toBeTruthy();
+        expect(chunks[0].destinations.map(d => d.address)).toEqual(destinationAddresses.slice(0, 10));
+        expect(chunks[3].destinations.map(d => d.address)).toEqual(destinationAddresses.slice(-3));
+
+        await awaitSeconds(1);
+        expect(await tokenService.airdropStatus(requestId)).toStrictEqual({ status: OperationStatus.Processing });
+
+        await awaitSeconds(5);
+        expect(await tokenService.airdropStatus(requestId)).toStrictEqual({ status: OperationStatus.Complete });
+        const allBalances = await Promise.all(destinationAddresses.map(async a => tokenContract.balanceOf(a)));
+        expect(allBalances.every(b => b == 50n)).toBeTruthy();
+    }, 10000);
+
+    it("Should perform partial airdrop when some chunks fail", async () => {
+        const randomAddresses = Array.from({ length: 30 }, _ => ({ address: Wallet.createRandom().address }));
+        const destinations = users.map(u => ({ userId: u.userId }) as IDestination)
+            .concat(randomAddresses)
+            .concat([{ userId: "notfound" }]);
+        const destinationAddresses = users.map(u => u.address).concat(randomAddresses.map(a => a.address));
+
+        jest.spyOn(MockTokenContract.prototype, 'mintMany').mockImplementationOnce(async () => { throw new Error("Mint failed") });
+
+        const requestId = await tokenService.airdrop(destinations, 50n);
+
+        await awaitSeconds(1);
+        expect(await tokenService.airdropStatus(requestId)).toStrictEqual({ status: OperationStatus.Processing });
+
+        await awaitSeconds(5);
+        const status = await tokenService.airdropStatus(requestId);
+        expect(status).toEqual(expect.objectContaining({ status: OperationStatus.Error }));
+        expect(status.errors.slice(0, -1).every(e => e.reason.endsWith("Mint failed"))).toBeTruthy();
+        expect(status.errors.slice(-1).every(e => e.reason.endsWith("Users not found"))).toBeTruthy();
+        expect(status.errors.map(e => e.address).filter(Boolean)).toEqual(destinationAddresses.slice(0, 10));
+        const invalidBalances = await Promise.all(destinationAddresses.slice(0, 10).map(async a => tokenContract.balanceOf(a)));
+        expect(invalidBalances.every(b => b == 0n)).toBeTruthy();
+        const validBalances = await Promise.all(destinationAddresses.slice(10).map(async a => tokenContract.balanceOf(a)));
+        expect(validBalances.every(b => b == 50n)).toBeTruthy();
+    }, 10000);
 });

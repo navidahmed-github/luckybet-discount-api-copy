@@ -1,3 +1,4 @@
+import { awaitSeconds } from "../../src/common.types";
 import { IJobService } from "../../src/modules/job/job.types";
 
 export class MockJobService implements IJobService {
@@ -8,6 +9,6 @@ export class MockJobService implements IJobService {
     }
 
     async run(name: string, data: unknown): Promise<void> {
-        await this._jobs.get(name)(data, () => {});
+        setTimeout(async () => { await this._jobs.get(name)(data, () => { }) }, 3000);
     }
 }

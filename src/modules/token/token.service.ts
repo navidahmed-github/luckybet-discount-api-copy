@@ -130,7 +130,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         const users = await this._userService.getAll();
         const addressMap = new Map(users.map(u => [u.userId, u.address]));
         const [valid, invalid] = destinations
-            .map(d => d.userId ? { ...destinations, address: d ?? addressMap.get(d.userId) } : d)
+            .map(d => d.userId ? { ...d, address: addressMap.get(d.userId) } : d)
             .reduce(([v, i], curr) => curr.address ? [[...v, curr], i] : [v, [...i, curr]], [[], []]);
 
         const requestId = uuid_v4();
