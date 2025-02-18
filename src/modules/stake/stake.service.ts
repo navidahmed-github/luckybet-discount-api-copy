@@ -1,0 +1,248 @@
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { MongoRepository } from "typeorm";
+import { MongoBulkWriteError } from "mongodb";
+import { Contract, EventLog, id, isAddress, JsonRpcApiProvider, Log, TransactionReceipt, Wallet } from "ethers";
+import { ProviderTokens } from "../../providerTokens";
+import { IDestination, toNumberSafe } from "../../common.types";
+import { DestinationInvalidError, InsufficientBalanceError, MONGO_DUPLICATE_KEY, StakeAlreadyExistsError, StakeCannotCreateError, StakeError, StakeMissingAddressError, StakeNotFoundError, UserCannotCreateError } from "../../error.types";
+import { IUserService } from "../user/user.types";
+import { DepositStake, RawStake, Stake, WithdrawStake } from "../../entities/stake.entity";
+import { DeployedContract } from "../../entities/contract.entity";
+import { IContractService } from "../../services/contract.service";
+import { IProviderService } from "../../services/ethereumProvider.service";
+import { IStakeService, StakeHistoryDTO, StakeStatusDTO, StakeType } from "./stake.types";
+
+export const DEPOSIT_TOPIC = id("Staked(address,uint256,uint256,uint256)");
+export const WITHDRAW_TOPIC = id("Withdrawn(address,uint256,uint256)");
+
+@Injectable()
+export class StakeService implements IStakeService, OnModuleInit, OnModuleDestroy {
+    private readonly _logger = new Logger(StakeService.name);
+    private readonly _provider: JsonRpcApiProvider;
+    private _disableListener: boolean;
+    private _events: Contract[];
+
+    constructor(
+        @Inject(ProviderTokens.UserService)
+        private readonly _userService: IUserService,
+
+        @Inject(ProviderTokens.ContractService)
+        private readonly _contractService: IContractService,
+
+        @Inject(ProviderTokens.EthereumProviderService)
+        ethereumProviderService: IProviderService,
+
+        @InjectRepository(Stake)
+        private readonly _stakeRepository: MongoRepository<Stake>,
+
+        @InjectRepository(DeployedContract)
+        private readonly _contractRepository: MongoRepository<DeployedContract>
+    ) {
+        this._provider = ethereumProviderService.getProvider();
+    }
+
+    public async onModuleInit() {
+        this._disableListener = false;
+        const currentBlock = await this._provider.getBlockNumber();
+        const contracts = await this.getAll();
+        this._events = await Promise.all(contracts.map(async c => this.initialiseContract(c.address, currentBlock)));
+    }
+
+    public async onModuleDestroy() {
+        this._events?.forEach(c => this.destroyContract(c));
+    }
+
+    public async getAll(): Promise<DeployedContract[]> {
+        this._logger.verbose("Retrieving all staking contracts");
+        const contracts = await this._contractRepository.find();
+        return contracts.filter(c => "stake" in c);
+    }
+
+    public async getByAddress(address: string): Promise<DeployedContract> {
+        this._logger.verbose(`Retrieving staking contract: ${address}`);
+        if (!address) {
+            throw new StakeMissingAddressError();
+        }
+        const contract = await this._contractRepository.findOne({ where: { address } });
+        if (!contract?.stake) {
+            throw new StakeNotFoundError(address);
+        }
+        return contract;
+    }
+
+    public async addContract(address: string): Promise<DeployedContract> {
+        this._logger.verbose(`Adding staking contract: ${address}`);
+        if (!address) {
+            throw new StakeMissingAddressError();
+        }
+        if (await this._contractRepository.findOne({ where: { address } })) {
+            throw new StakeAlreadyExistsError(address);
+        }
+        const staking = await this._contractService.stakeContract(address);
+        try {
+            if (!await staking.supportsInterface("0x2919aabb")) {
+                throw new Error();
+            }
+        } catch {
+            throw new StakeCannotCreateError(`Staking contract not detected at ${address}`);
+        }
+        try {
+            const lockTime = toNumberSafe(await staking.lockTime());
+            const rewardPercentage = toNumberSafe(await staking.rewardPercentage()) / 100.0;
+            await this._contractRepository.save({ address, stake: { rewardPercentage, lockTime } });
+            return await this.getByAddress(address);
+        } catch (err) {
+            // unique constraint will ensure that race conditions are handled
+            if (err instanceof MongoBulkWriteError && err.code == MONGO_DUPLICATE_KEY)
+                throw new StakeAlreadyExistsError(address);
+            throw new StakeCannotCreateError(err.message);
+        }
+    }
+
+    public async getHistory(dest: IDestination): Promise<StakeHistoryDTO[]> {
+        const [address] = await this.parseDestination(dest);
+        this._logger.verbose(`Retrieving stake history for address: ${address}`);
+        const stakes = await this._stakeRepository.find({
+            where: { stakerAddress: address },
+            order: { blockTimestamp: "ASC" }
+        })
+        return stakes.map(toHistory);
+
+        function toHistory(stake: Stake): StakeHistoryDTO {
+            const dto = stake.withdraw ?
+                { type: StakeType.Withdrawal, rewardAmount: stake.withdraw.rewardAmount } :
+                { type: StakeType.Deposit }
+            return { ...dto, stakedAmount: stake.stakedAmount, timestamp: stake.blockTimestamp }
+        }
+    }
+
+    public async getStatus(contractAddress: string, userId: string): Promise<StakeStatusDTO> {
+        const wallet = await this._userService.getUserWallet(userId);
+        const staking = await this._contractService.stakeContract(contractAddress);
+        const locked = (await staking.lockedAmount(wallet.address)).toString();
+        const unlocked = (await staking.unlockedAmount(wallet.address)).toString();
+        const reward = (await staking.rewardAmount(wallet.address)).toString();
+        return { unlocked, locked, reward };
+    }
+
+    public async deposit(contractAddress: string, userId: string, amount: bigint): Promise<RawStake> {
+        this._logger.verbose(`Stake tokens for user: ${userId}, contract: ${contractAddress}, amount: ${amount}`);
+        await this.getByAddress(contractAddress); // check exists
+        const wallet = await this._userService.getUserWallet(userId);
+        const token = await this._contractService.tokenContract(wallet);
+        const staking = await this._contractService.stakeContract(contractAddress, wallet);
+
+        const balance = await token.balanceOf(wallet.address);
+        if (balance < amount) {
+            throw new InsufficientBalanceError(`Attempting to stake ${amount} tokens when only ${balance} available`);
+        }
+
+        const txApprove = await token.approve(contractAddress, amount);
+        await txApprove.wait();
+        const tx = await staking.stake(amount);
+        return this.lockStake(async () => {
+            const txReceipt: TransactionReceipt = await tx.wait();
+            const unlockTime: bigint = (txReceipt.logs.find(l => l.topics[0] === DEPOSIT_TOPIC) as EventLog)?.args[2];
+            if (!unlockTime) {
+                throw new StakeError("Failed to read unlock time from event");
+            }
+            const depositFields = { unlockTime: toNumberSafe(unlockTime) }
+            return this.saveStake(contractAddress, wallet.address, amount, txReceipt.blockNumber, txReceipt.hash, depositFields);
+        });
+    }
+
+    public async withdraw(contractAddress: string, userId: string): Promise<RawStake> {
+        this._logger.verbose(`Withdraw tokens for user: ${userId}, contract: ${contractAddress}`);
+        await this.getByAddress(contractAddress); // check exists
+        const wallet = await this._userService.getUserWallet(userId);
+        const staking = await this._contractService.stakeContract(contractAddress, wallet);
+        const tx = await staking.withdraw();
+        return this.lockStake(async () => {
+            const txReceipt: TransactionReceipt = await tx.wait();
+            const log = txReceipt.logs.find(l => l.topics[0] === WITHDRAW_TOPIC) as EventLog;
+            const stake: bigint = log?.args[1];
+            const reward: bigint = log?.args[2];
+            if (!stake || !reward) {
+                throw new StakeError("Failed to read stake/reward from event");
+            }
+            const withdrawFields = { rewardAmount: reward.toString() };
+            return this.saveStake(contractAddress, wallet.address, stake, txReceipt.blockNumber, txReceipt.hash, withdrawFields);
+        });
+    }
+
+    private async initialiseContract(address: string, currentBlock: number): Promise<Contract> {
+        const event = await this._contractService.stakeContract(address);
+        const depositEvts = await event.queryFilter("Staked", Math.max(currentBlock - 10000, 0), currentBlock);
+        Promise.allSettled(depositEvts.filter(evt => "args" in evt).map(async (evt) =>
+            this.saveStake(address, evt.args[0], evt.args[3], evt.blockNumber, evt.transactionHash, { unlockTime: toNumberSafe(evt.args[2]) })));
+        const withdrawEvts = await event.queryFilter("Withdrawn", Math.max(currentBlock - 10000, 0), currentBlock);
+        Promise.allSettled(withdrawEvts.filter(evt => "args" in evt).map(async (evt) =>
+            this.saveStake(address, evt.args[0], evt.args[1], evt.blockNumber, evt.transactionHash, { rewardAmount: evt.args[2].toString() })));
+        event.on("Staked", this.depositListener);
+        event.on("Withdrawn", this.withdrawListener);
+        return event;
+    }
+
+    private async destroyContract(contract: Contract) {
+        contract.off("Staked", this.depositListener); // !!
+        contract.off("Withdrawn", this.withdrawListener);
+    }
+
+    private async lockStake<T>(fn: () => Promise<T>): Promise<T> {
+        try {
+            this._disableListener = true;
+            return await fn();
+        } finally {
+            this._disableListener = false;
+        }
+    }
+
+    private async saveStake(
+        contractAddress: string,
+        stakerAddress: string,
+        stakedAmount: bigint,
+        blockNumber: number,
+        txHash: string,
+        otherFields: DepositStake | WithdrawStake
+    ): Promise<RawStake> {
+        const embedded = "rewardAmount" in otherFields ? { withdraw: { ...otherFields } } : { deposit: { ...otherFields } };
+        const stake = { contractAddress, stakerAddress, stakedAmount: stakedAmount.toString(), blockNumber, txHash, ...embedded };
+        try {
+            if (!await this._stakeRepository.findOne({ where: { txHash } })) {
+                const blockTimestamp = (await this._provider.getBlock(blockNumber)).timestamp;
+                return await this._stakeRepository.save({ ...stake, blockTimestamp });
+            }
+        } catch (err) {
+            if (!(err instanceof MongoBulkWriteError && err.code == MONGO_DUPLICATE_KEY)) // ignore if already exists
+                this._logger.error(`Failed to write stake with txHash: ${txHash}, reason: ${err.messsage}`, err.stack);
+        }
+        return stake;
+    }
+
+    private depositListener = async (contract: string, staker: string, unlockTime: bigint, amount: bigint, { log }: { log: Log }) => {
+        if (!this._disableListener) {
+            await this.saveStake(contract, staker, amount, log.blockNumber, log.transactionHash, { unlockTime: toNumberSafe(unlockTime) });
+        }
+    }
+
+    private withdrawListener = async (contract: string, staker: string, stake: bigint, reward: bigint, { log }: { log: Log }) => {
+        if (!this._disableListener) {
+            await this.saveStake(contract, staker, stake, log.blockNumber, log.transactionHash, { rewardAmount: reward.toString() });
+        }
+    }
+
+    protected async parseDestination(to: IDestination): Promise<[string, Wallet?]> { // !! share this
+        if (to.userId) {
+            if (to.address)
+                throw new DestinationInvalidError("Cannot provide both user and address as destination");
+            const wallet = await this._userService.getUserWallet(to.userId);
+            return [wallet.address, wallet];
+        }
+        if (!to.address)
+            throw new DestinationInvalidError("No destination provided");
+        if (!isAddress(to.address))
+            throw new DestinationInvalidError(`Not a valid Ethereum address: ${to.address}`);
+        return [to.address, null];
+    }
+}

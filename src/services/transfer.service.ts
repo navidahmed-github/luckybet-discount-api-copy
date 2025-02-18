@@ -4,7 +4,7 @@ import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
 import { Contract, isAddress, JsonRpcApiProvider, Log, Wallet, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../providerTokens";
-import { HistoryDTO, IDestination, TransferType } from "../common.types";
+import { IDestination, TransferHistoryDTO, TransferType } from "../common.types";
 import { DestinationInvalidError, MONGO_DUPLICATE_KEY } from "../error.types";
 import { RawTransfer, Transfer } from "../entities/transfer.entity";
 import { User } from "../entities/user.entity";
@@ -12,7 +12,7 @@ import { IContractService } from "../services/contract.service";
 import { IProviderService } from "../services/ethereumProvider.service";
 import { IUserService } from "../modules/user/user.types";
 
-export class TransferService<T extends HistoryDTO> implements OnModuleInit, OnModuleDestroy {
+export class TransferService<T extends TransferHistoryDTO> implements OnModuleInit, OnModuleDestroy {
     protected readonly _provider: JsonRpcApiProvider;
     protected readonly _userTableName: string;
     protected _disableListener: boolean;

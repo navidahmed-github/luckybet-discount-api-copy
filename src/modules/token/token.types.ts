@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
-import { DestinationDTO, DestinationErrorDTO, HistoryDTO, IDestination, ISource, OperationStatus, TransferType } from "../../common.types";
+import { DestinationDTO, DestinationErrorDTO, IDestination, ISource, OperationStatus, TransferHistoryDTO } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 
 export class AirdropCommand {
@@ -55,7 +55,7 @@ export class TokenBalanceDTO {
     balance: string;
 }
 
-export class TokenHistoryDTO extends HistoryDTO {
+export class TokenHistoryDTO extends TransferHistoryDTO {
     @ApiProperty({
         description: "Amount of tokens transferred",
         type: String,

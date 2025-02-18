@@ -67,8 +67,8 @@ export class UserController {
 	@ApiBadRequestResponse({ description: "Missing information or user already exists" })
 	@ApiInternalServerErrorResponse({ description: "User could not be saved" })
 	@HttpCode(HttpStatus.CREATED)
-	async create(@Body() createUserCommand: CreateUserCommand): Promise<UserDTO> {
-		return this._userService.create(createUserCommand.id).then(this.toDTO);
+	async create(@Body() cmd: CreateUserCommand): Promise<UserDTO> {
+		return this._userService.create(cmd.id).then(this.toDTO);
 	}
 	
 	private toDTO(user: User): UserDTO {

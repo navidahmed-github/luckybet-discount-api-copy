@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
-import { DestinationDTO, HistoryDTO, IDestination, ISource, MimeType } from "../../common.types";
+import { DestinationDTO, IDestination, ISource, MimeType, TransferHistoryDTO } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { Metadata } from "../../entities/template.entity";
 import { OfferImage } from "../../entities/image.entity";
@@ -74,7 +74,7 @@ export class ActivateOfferCommand {
     tokenId: string;
 }
 
-export class OfferHistoryDTO extends HistoryDTO {
+export class OfferHistoryDTO extends TransferHistoryDTO {
     @IsNotEmpty()
     @ApiProperty({
         description: "Offer transferred",

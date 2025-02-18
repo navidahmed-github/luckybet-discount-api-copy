@@ -7,11 +7,14 @@ import { RolesGuard } from "../auth/roles.guard";
 import { UserModule } from "./user/user.module";
 import { TokenModule } from "./token/token.module";
 import { OfferModule } from "./offer/offer.module";
+import { StakeModule } from "./stake/stake.module";
 import { User } from "../entities/user.entity";
 import { Transfer } from "../entities/transfer.entity";
 import { Template } from "../entities/template.entity";
 import { AirdropChunk } from "../entities/airdrop.entity";
 import { OfferImage } from "../entities/image.entity";
+import { Stake } from "../entities/stake.entity";
+import { DeployedContract } from "../entities/contract.entity";
 
 @Module({
 	imports: [
@@ -21,7 +24,7 @@ import { OfferImage } from "../entities/image.entity";
 		TypeOrmModule.forRoot({
 			type: "mongodb",
 			url: process.env.MONGO_CONNECTION_STRING,
-			entities: [User, Transfer, Template, OfferImage, AirdropChunk],
+			entities: [User, Transfer, Template, OfferImage, AirdropChunk, Stake, DeployedContract],
 			retryAttempts: 3,
 			retryDelay: 10000,
 			synchronize: true
@@ -32,7 +35,8 @@ import { OfferImage } from "../entities/image.entity";
 		}),
 		UserModule,
 		TokenModule,
-		OfferModule
+		OfferModule,
+		StakeModule
 	],
 	providers: [
 		{

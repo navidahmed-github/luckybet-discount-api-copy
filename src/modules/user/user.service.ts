@@ -16,13 +16,13 @@ export class UserService implements IUserService, OnModuleInit {
 
 	constructor(
 		@Inject(ProviderTokens.WalletService)
-		private _walletService: IWalletService,
+		private readonly _walletService: IWalletService,
 
 		@Inject(ProviderTokens.AtomicSequenceService)
-		private _atomicSequenceService: IAtomicSequenceService,
+		private readonly _atomicSequenceService: IAtomicSequenceService,
 
 		@InjectRepository(User)
-		private _userRepository: MongoRepository<User>,
+		private readonly _userRepository: MongoRepository<User>,
 	) { }
 
 	public async onModuleInit() {

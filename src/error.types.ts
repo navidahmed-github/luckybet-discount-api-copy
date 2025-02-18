@@ -4,7 +4,8 @@ export const MONGO_DUPLICATE_KEY = 11000;
 export enum EntityNames {
 	User = "User",
 	Airdrop = "Airdrop",
-	Offer = "Offer"
+	Offer = "Offer",
+	Stake = "Stake"
 }
 
 //=== Abstract Error classes
@@ -113,6 +114,42 @@ export class OfferTokenIdError extends OfferError {
 	constructor(message: string) {
 		super(message);
 		this.name = OfferTokenIdError.name;
+	}
+}
+
+//=== Staking errors
+export class StakeError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = StakeError.name;
+	}
+}
+
+export class StakeCannotCreateError extends EntityCannotCreateError {
+	constructor(address: string) {
+		super(EntityNames.Stake, address);
+		this.name = StakeCannotCreateError.name;
+	}
+}
+
+export class StakeNotFoundError extends EntityNotFoundError {
+	constructor(address: string) {
+		super(EntityNames.Stake, address);
+		this.name = StakeNotFoundError.name;
+	}
+}
+
+export class StakeMissingAddressError extends EntityMissingIdError {
+	constructor() {
+		super(EntityNames.Stake);
+		this.name = StakeMissingAddressError.name;
+	}
+}
+
+export class StakeAlreadyExistsError extends EntityAlreadyExistsError {
+	constructor(address: string) {
+		super(EntityNames.Stake, address);
+		this.name = StakeAlreadyExistsError.name;
 	}
 }
 

@@ -20,7 +20,7 @@ export const TRANSFER_TOPIC = id("Transfer(address,address,uint256)");
 export class OfferService extends TransferService<OfferHistoryDTO> implements IOfferService {
     constructor(
         @Inject(ProviderTokens.WalletService)
-        private _walletService: IWalletService,
+        private readonly _walletService: IWalletService,
 
         @Inject(ProviderTokens.EthereumProviderService)
         ethereumProviderService: IProviderService,
@@ -29,10 +29,10 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         userRepository: MongoRepository<User>,
 
         @InjectRepository(Template)
-        private _templateRepository: MongoRepository<Template>,
+        private readonly _templateRepository: MongoRepository<Template>,
 
         @InjectRepository(OfferImage)
-        private _imageRepository: MongoRepository<OfferImage>,
+        private readonly _imageRepository: MongoRepository<OfferImage>,
     ) {
         super(new Logger(OfferService.name), ethereumProviderService, userRepository);
     }

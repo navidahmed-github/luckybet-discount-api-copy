@@ -1,10 +1,10 @@
 import { ApiProperty, ApiQuery } from "@nestjs/swagger";
 
 export enum OperationStatus {
-    Pending = "Pending",
-    Processing = "Processing",
-    Complete = "Complete",
-    Error = "Error"
+    Pending = 'Pending',
+    Processing = 'Processing',
+    Complete = 'Complete',
+    Error = 'Error'
 }
 
 export enum TransferType {
@@ -55,9 +55,9 @@ export class DestinationErrorDTO extends DestinationDTO {
     reason: string;
 }
 
-export class HistoryDTO {
+export class TransferHistoryDTO {
     @ApiProperty({
-        description: "Type of transfer",
+        description: "Type of record",
         enum: TransferType,
     })
     type: TransferType;
@@ -75,7 +75,7 @@ export class HistoryDTO {
     otherUser?: string;
 
     @ApiProperty({
-        description: "Timestamp when the transfer occurred",
+        description: "Timestamp when the event occurred",
         type: Number,
     })
     timestamp: number;
@@ -101,6 +101,13 @@ export function toAdminString(from: ISource) {
 
 export function formatTokenId(tokenId: bigint) {
     return `0x${tokenId.toString(16)}`
+}
+
+export function toNumberSafe(value: bigint): number {
+    if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
+        throw new Error("Big integer cannot be safely converted to number");
+    }
+    return Number(value);
 }
 
 export function awaitSeconds(seconds: number) {

@@ -22,10 +22,10 @@ const AIRDROP_JOB_NAME = "airdropTask";
 export class TokenService extends TransferService<TokenHistoryDTO> implements ITokenService, OnApplicationBootstrap {
     constructor(
         @Inject(ProviderTokens.JobService)
-        private _jobService: IJobService,
+        private readonly _jobService: IJobService,
 
         @Inject(ProviderTokens.WalletService)
-        private _walletService: IWalletService,
+        private readonly _walletService: IWalletService,
 
         @Inject(ProviderTokens.EthereumProviderService)
         ethereumProviderService: IProviderService,
@@ -34,7 +34,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         userRepository: MongoRepository<User>,
 
         @InjectRepository(AirdropChunk)
-        private _airdropRepository: MongoRepository<AirdropChunk>
+        private readonly _airdropRepository: MongoRepository<AirdropChunk>
     ) {
         super(new Logger(TokenService.name), ethereumProviderService, userRepository);
     }
