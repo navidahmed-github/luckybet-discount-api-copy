@@ -1,10 +1,12 @@
 import { Contract, keccak256, Log, TransactionReceipt, TransactionResponse, Wallet, ZeroAddress } from "ethers";
 import { IContractService } from "../../src/services/contract.service";
 import { TRANSFER_TOPIC } from "../../src/modules/offer/offer.service";
+import { DEPOSIT_TOPIC, WITHDRAW_TOPIC } from "../../src/modules/stake/stake.service";
 
 export class MockContractService implements IContractService {
     public reset() {
         MockTokenContract.reset();
+        MockStakeContract.reset();
         MockOfferContract.reset();
     }
 
@@ -12,8 +14,8 @@ export class MockContractService implements IContractService {
         return new MockTokenContract(wallet) as any;
     }
 
-    public async stakeContract(_address: string, _wallet?: Wallet): Promise<Contract> {
-        return new MockStakeContract() as any;
+    public async stakeContract(address: string, wallet?: Wallet): Promise<Contract> {
+        return new MockStakeContract(address, wallet) as any;
     }
 
     public async offerContract(wallet?: Wallet): Promise<Contract> {
@@ -32,15 +34,22 @@ export class MockTransactionRequest {
     }
 }
 
-export class MockTokenContract {
-    private static balances: Map<string, bigint>;
-    private static approvals: Map<string, [string, bigint]>;
-    walletAddress: string;
-    isAdmin: boolean;
+abstract class MockBaseContract {
+    protected walletAddress: string;
+    protected isAdmin: boolean;
 
     constructor(wallet?: Wallet) {
         this.walletAddress = wallet?.address ?? ZeroAddress;
         this.isAdmin = wallet?.address === "0x14791697260E4c9A71f18484C9f997B308e59325";
+    }
+}
+
+export class MockTokenContract extends MockBaseContract {
+    private static balances: Map<string, bigint>;
+    private static approvals: Map<string, [string, bigint]>;
+
+    constructor(wallet?: Wallet) {
+        super(wallet);
     }
 
     static reset() {
@@ -115,19 +124,83 @@ export class MockTokenContract {
     }
 }
 
-export class MockStakeContract {
+export class MockStakeContract extends MockBaseContract {
+    private static deployed: string[];
+    private static stakes: Map<string, Map<string, bigint>>;
+    private static closed: boolean;
+    contractAddress: string;
+
+    constructor(address: string, wallet?: Wallet) {
+        super(wallet);
+        if (!MockStakeContract.deployed.includes(address)) {
+            MockStakeContract.deployed.push(address);
+            MockStakeContract.stakes.set(address, new Map<string, bigint>());
+        }
+        this.contractAddress = address;
+    }
+
+    static reset() {
+        MockStakeContract.deployed = [];
+        MockStakeContract.stakes = new Map<string, Map<string, bigint>>();
+        MockStakeContract.closed = false;
+    }
+
+    async supportsInterface(interfaceId: string): Promise<boolean> {
+        return interfaceId == "0x2919aabb";
+    }
+
+    async rewardPercentage(): Promise<bigint> {
+        return 150n * BigInt(MockStakeContract.deployed.findIndex(a => a == this.contractAddress) + 1);
+    }
+
+    async lockTime(): Promise<bigint> {
+        return 60n;
+    }
+
+    async close(): Promise<void> {
+        if (!this.isAdmin) throw new Error("Requires administrator rights");
+        MockStakeContract.closed = true;
+    }
+
+    async isClosed(): Promise<boolean> {
+        return MockStakeContract.closed;
+    }
+
+    async lockedAmount(staker: string): Promise<bigint> {
+        return (MockStakeContract.stakes.get(this.contractAddress).get(staker) ?? 0n) * 2n / 5n;
+    }
+
+    async unlockedAmount(staker: string): Promise<bigint> {
+        return (MockStakeContract.stakes.get(this.contractAddress).get(staker) ?? 0n) * 3n / 5n;
+    }
+
+    async rewardAmount(staker: string): Promise<bigint> {
+        return (MockStakeContract.stakes.get(this.contractAddress).get(staker) ?? 0n) / 10n;
+    }
+
+    async stake(amount: bigint): Promise<Partial<TransactionResponse>> {
+        const token = new MockTokenContract({ address: this.contractAddress } as Wallet);
+        token.transferFrom(this.walletAddress, this.contractAddress, amount);
+        const contractStakes = MockStakeContract.stakes.get(this.contractAddress);
+        contractStakes.set(this.walletAddress, (contractStakes.get(this.walletAddress) ?? 0n) + amount);
+        return new MockTransactionRequest({ logs: [{ topics: [DEPOSIT_TOPIC], args: [this.walletAddress, 0n, 1234n, amount] }] });
+    }
+
+    async withdraw(): Promise<Partial<TransactionResponse>> {
+        const contractStakes = MockStakeContract.stakes.get(this.contractAddress);
+        const staked = contractStakes.get(this.walletAddress) ?? 0n;
+        contractStakes.set(this.walletAddress, staked * 2n / 5n);
+        return new MockTransactionRequest({ logs: [{ topics: [WITHDRAW_TOPIC], args: [this.walletAddress, staked * 3n / 5n, staked / 10n] }] });
+    }
 }
 
-export class MockOfferContract {
+export class MockOfferContract extends MockBaseContract {
     private static owners: Map<bigint, string>;
     private static approvals: Map<bigint, string>;
     private static instances: Map<bigint, bigint>;
-    walletAddress: string;
-    isAdmin: boolean;
 
     constructor(wallet?: Wallet) {
-        this.walletAddress = wallet?.address ?? ZeroAddress;
-        this.isAdmin = wallet?.address === "0x14791697260E4c9A71f18484C9f997B308e59325";
+        super(wallet);
     }
 
     static reset() {

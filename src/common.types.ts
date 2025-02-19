@@ -1,4 +1,7 @@
 import { ApiProperty, ApiQuery } from "@nestjs/swagger";
+import { isAddress, Wallet } from "ethers";
+import { DestinationInvalidError } from "./error.types";
+import { IUserService } from "./modules/user/user.types";
 
 export enum OperationStatus {
     Pending = 'Pending',
@@ -95,6 +98,13 @@ export const ApiQueryAddress = (description: string, required: boolean = false) 
     type: String,
 })
 
+export function toNumberSafe(value: bigint): number {
+    if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
+        throw new Error("Big integer cannot be safely converted to number");
+    }
+    return Number(value);
+}
+
 export function toAdminString(from: ISource) {
     return from.asAdmin ? `as admin: ${from.asAdmin}` : "";
 }
@@ -103,15 +113,22 @@ export function formatTokenId(tokenId: bigint) {
     return `0x${tokenId.toString(16)}`
 }
 
-export function toNumberSafe(value: bigint): number {
-    if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
-        throw new Error("Big integer cannot be safely converted to number");
-    }
-    return Number(value);
-}
-
-export function awaitSeconds(seconds: number) {
+export async function awaitSeconds(seconds: number): Promise<void> {
     return new Promise<void>(resolve => {
         setTimeout(() => resolve(), seconds * 1000);
     });
+}
+
+export async function parseDestination(userService: IUserService, to: IDestination): Promise<[string, Wallet?]> {
+    if (to.userId) {
+        if (to.address)
+            throw new DestinationInvalidError("Cannot provide both user and address as destination");
+        const wallet = await userService.getUserWallet(to.userId);
+        return [wallet.address, wallet];
+    }
+    if (!to.address)
+        throw new DestinationInvalidError("No destination provided");
+    if (!isAddress(to.address))
+        throw new DestinationInvalidError(`Not a valid Ethereum address: ${to.address}`);
+    return [to.address, null];
 }

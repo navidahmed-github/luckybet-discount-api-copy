@@ -20,6 +20,8 @@ const run = async () => {
         headers: { Authorization: `Bearer ${authTokens.jwtAdmin}` },
     });
 
+    response = await http.put("/stakes/0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9");
+    return; // !!
 
     response = await http.post("/users", { id: "1001" });
     response = await http.post("/users", { id: "1003" });

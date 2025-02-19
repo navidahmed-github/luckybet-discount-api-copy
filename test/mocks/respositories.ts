@@ -5,6 +5,8 @@ import { Transfer } from "../../src/entities/transfer.entity";
 import { Template } from "../../src/entities/template.entity";
 import { OfferImage } from "../../src/entities/image.entity";
 import { AirdropChunk } from "../../src/entities/airdrop.entity";
+import { Stake } from "../../src/entities/stake.entity";
+import { DeployedContract } from "../../src/entities/contract.entity";
 
 function makeMockRepository<T>(tableName: string): jest.Mocked<Repository<T>> {
 	return {
@@ -53,4 +55,12 @@ export function makeMockImageRepository() {
 
 export function makeMockAirdropRepository() {
 	return makeMockRepository<AirdropChunk>("airdrops");
+}
+
+export function makeMockStakeRepository() {
+	return makeMockRepository<Stake>("stakes");
+}
+
+export function makeMockContractRepository() {
+	return makeMockRepository<DeployedContract>("contracts");
 }

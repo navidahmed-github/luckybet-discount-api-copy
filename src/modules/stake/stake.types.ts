@@ -32,6 +32,12 @@ export class StakeHistoryDTO {
     type: StakeType;
 
     @ApiProperty({
+        description: "Address of staking contract",
+        type: String,
+    })
+    contractAddress: string;
+
+    @ApiProperty({
         description: "Amount staked/returned",
         type: String,
     })

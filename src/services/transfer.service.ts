@@ -2,10 +2,10 @@ import { Inject, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
-import { Contract, isAddress, JsonRpcApiProvider, Log, Wallet, ZeroAddress } from "ethers";
+import { Contract, JsonRpcApiProvider, Log, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../providerTokens";
-import { IDestination, TransferHistoryDTO, TransferType } from "../common.types";
-import { DestinationInvalidError, MONGO_DUPLICATE_KEY } from "../error.types";
+import { IDestination, parseDestination, TransferHistoryDTO, TransferType } from "../common.types";
+import { MONGO_DUPLICATE_KEY } from "../error.types";
 import { RawTransfer, Transfer } from "../entities/transfer.entity";
 import { User } from "../entities/user.entity";
 import { IContractService } from "../services/contract.service";
@@ -47,11 +47,11 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
     }
 
     public async onModuleDestroy() {
-        this._event?.off("Transfer", this.transferListener);
+        this._event?.off("Transfer");
     }
 
     public async getHistory(dest: IDestination, name: string, toDtoData: (t: Transfer) => Omit<T, "type" | "timestamp">): Promise<T[]> {
-        const [address] = await this.parseDestination(dest);
+        const [address] = await parseDestination(this._userService, dest);
         this._logger.verbose(`Retrieving ${name} history for address: ${address}`);
         const lookupPipeline = (prefix: string) => {
             return {
@@ -101,20 +101,6 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
             const data = toDtoData(transfer);
             return { ...dto, ...data, timestamp: transfer.blockTimestamp };
         }
-    }
-
-    protected async parseDestination(to: IDestination): Promise<[string, Wallet?]> {
-        if (to.userId) {
-            if (to.address)
-                throw new DestinationInvalidError("Cannot provide both user and address as destination");
-            const wallet = await this._userService.getUserWallet(to.userId);
-            return [wallet.address, wallet];
-        }
-        if (!to.address)
-            throw new DestinationInvalidError("No destination provided");
-        if (!isAddress(to.address))
-            throw new DestinationInvalidError(`Not a valid Ethereum address: ${to.address}`);
-        return [to.address, null];
     }
 
     protected async getContract(): Promise<Contract> {

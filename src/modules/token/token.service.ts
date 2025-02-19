@@ -4,7 +4,7 @@ import { MongoRepository } from "typeorm";
 import { Contract, isAddress, ZeroAddress } from "ethers";
 import { v4 as uuid_v4 } from 'uuid';
 import { ProviderTokens } from "../../providerTokens";
-import { IDestination, ISource, OperationStatus, toAdminString } from "../../common.types";
+import { IDestination, ISource, OperationStatus, parseDestination, toAdminString } from "../../common.types";
 import { AirdropCannotCreateError, AirdropNotFoundError, DestinationInvalidError, InsufficientBalanceError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { AirdropChunk } from "../../entities/airdrop.entity";
@@ -44,7 +44,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
     }
 
     public async getBalance(dest: IDestination): Promise<bigint> {
-        const [address] = await this.parseDestination(dest);
+        const [address] = await parseDestination(this._userService, dest);
         this._logger.verbose(`Retrieving balance for address: ${address}`);
         const token = await this._contractService.tokenContract();
         return await token.balanceOf(address);
@@ -55,7 +55,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
     }
 
     public async create(to: IDestination, amount: bigint): Promise<RawTransfer> {
-        const [toAddress] = await this.parseDestination(to);
+        const [toAddress] = await parseDestination(this._userService, to);
         this._logger.verbose(`Mint tokens to: ${toAddress}, amount: ${amount}`);
         const admin = this._walletService.getAdminWallet();
         const token = await this._contractService.tokenContract(admin);
@@ -85,7 +85,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
     }
 
     public async transfer(from: ISource, to: IDestination, amount: bigint): Promise<RawTransfer> {
-        const [toAddress] = await this.parseDestination(to);
+        const [toAddress] = await parseDestination(this._userService, to);
         this._logger.verbose(`Transfer tokens from user: ${from.userId}, to: ${toAddress}, amount: ${amount} ${toAdminString(from)}`);
         const wallet = await this._userService.getUserWallet(from.userId);
         const token = await this._contractService.tokenContract(wallet);

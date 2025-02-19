@@ -2,14 +2,15 @@ import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nest
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
-import { Contract, EventLog, id, isAddress, JsonRpcApiProvider, Log, TransactionReceipt, Wallet } from "ethers";
+import { Contract, EventLog, id, JsonRpcApiProvider, Log, TransactionReceipt } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { IDestination, toNumberSafe } from "../../common.types";
-import { DestinationInvalidError, InsufficientBalanceError, MONGO_DUPLICATE_KEY, StakeAlreadyExistsError, StakeCannotCreateError, StakeError, StakeMissingAddressError, StakeNotFoundError, UserCannotCreateError } from "../../error.types";
+import { IDestination, parseDestination, toNumberSafe } from "../../common.types";
+import { InsufficientBalanceError, MONGO_DUPLICATE_KEY, StakeAlreadyExistsError, StakeCannotCreateError, StakeError, StakeMissingAddressError, StakeNotFoundError } from "../../error.types";
 import { IUserService } from "../user/user.types";
 import { DepositStake, RawStake, Stake, WithdrawStake } from "../../entities/stake.entity";
 import { DeployedContract } from "../../entities/contract.entity";
 import { IContractService } from "../../services/contract.service";
+import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
 import { IStakeService, StakeHistoryDTO, StakeStatusDTO, StakeType } from "./stake.types";
 
@@ -29,6 +30,9 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
 
         @Inject(ProviderTokens.ContractService)
         private readonly _contractService: IContractService,
+
+        @Inject(ProviderTokens.WalletService)
+        private readonly _walletService: IWalletService,
 
         @Inject(ProviderTokens.EthereumProviderService)
         ethereumProviderService: IProviderService,
@@ -101,7 +105,7 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
     }
 
     public async getHistory(dest: IDestination): Promise<StakeHistoryDTO[]> {
-        const [address] = await this.parseDestination(dest);
+        const [address] = await parseDestination(this._userService, dest);
         this._logger.verbose(`Retrieving stake history for address: ${address}`);
         const stakes = await this._stakeRepository.find({
             where: { stakerAddress: address },
@@ -113,7 +117,7 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
             const dto = stake.withdraw ?
                 { type: StakeType.Withdrawal, rewardAmount: stake.withdraw.rewardAmount } :
                 { type: StakeType.Deposit }
-            return { ...dto, stakedAmount: stake.stakedAmount, timestamp: stake.blockTimestamp }
+            return { ...dto, contractAddress: stake.contractAddress, stakedAmount: stake.stakedAmount, timestamp: stake.blockTimestamp }
         }
     }
 
@@ -138,6 +142,7 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
             throw new InsufficientBalanceError(`Attempting to stake ${amount} tokens when only ${balance} available`);
         }
 
+        await this._walletService.gasWallet(wallet);
         const txApprove = await token.approve(contractAddress, amount);
         await txApprove.wait();
         const tx = await staking.stake(amount);
@@ -157,6 +162,8 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         await this.getByAddress(contractAddress); // check exists
         const wallet = await this._userService.getUserWallet(userId);
         const staking = await this._contractService.stakeContract(contractAddress, wallet);
+
+        await this._walletService.gasWallet(wallet);
         const tx = await staking.withdraw();
         return this.lockStake(async () => {
             const txReceipt: TransactionReceipt = await tx.wait();
@@ -179,14 +186,14 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         const withdrawEvts = await event.queryFilter("Withdrawn", Math.max(currentBlock - 10000, 0), currentBlock);
         Promise.allSettled(withdrawEvts.filter(evt => "args" in evt).map(async (evt) =>
             this.saveStake(address, evt.args[0], evt.args[1], evt.blockNumber, evt.transactionHash, { rewardAmount: evt.args[2].toString() })));
-        event.on("Staked", this.depositListener);
-        event.on("Withdrawn", this.withdrawListener);
+        event.on("Staked", this.depositListener(address));
+        event.on("Withdrawn", this.withdrawListener(address));
         return event;
     }
 
     private async destroyContract(contract: Contract) {
-        contract.off("Staked", this.depositListener); // !!
-        contract.off("Withdrawn", this.withdrawListener);
+        contract.off("Staked");
+        contract.off("Withdrawn");
     }
 
     private async lockStake<T>(fn: () => Promise<T>): Promise<T> {
@@ -220,29 +227,15 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         return stake;
     }
 
-    private depositListener = async (contract: string, staker: string, unlockTime: bigint, amount: bigint, { log }: { log: Log }) => {
+    private depositListener = (contract: string) => async (staker: string, unlockTime: bigint, amount: bigint, { log }: { log: Log }) => {
         if (!this._disableListener) {
             await this.saveStake(contract, staker, amount, log.blockNumber, log.transactionHash, { unlockTime: toNumberSafe(unlockTime) });
         }
     }
 
-    private withdrawListener = async (contract: string, staker: string, stake: bigint, reward: bigint, { log }: { log: Log }) => {
+    private withdrawListener = (contract: string) => async (staker: string, stake: bigint, reward: bigint, { log }: { log: Log }) => {
         if (!this._disableListener) {
             await this.saveStake(contract, staker, stake, log.blockNumber, log.transactionHash, { rewardAmount: reward.toString() });
         }
-    }
-
-    protected async parseDestination(to: IDestination): Promise<[string, Wallet?]> { // !! share this
-        if (to.userId) {
-            if (to.address)
-                throw new DestinationInvalidError("Cannot provide both user and address as destination");
-            const wallet = await this._userService.getUserWallet(to.userId);
-            return [wallet.address, wallet];
-        }
-        if (!to.address)
-            throw new DestinationInvalidError("No destination provided");
-        if (!isAddress(to.address))
-            throw new DestinationInvalidError(`Not a valid Ethereum address: ${to.address}`);
-        return [to.address, null];
     }
 }

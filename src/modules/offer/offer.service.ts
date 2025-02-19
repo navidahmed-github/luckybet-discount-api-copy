@@ -3,7 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { Contract, EventLog, id, TransactionReceipt, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { formatTokenId, IDestination, ISource, MimeType, toAdminString } from "../../common.types";
+import { formatTokenId, IDestination, ISource, MimeType, parseDestination, toAdminString } from "../../common.types";
 import { InsufficientBalanceError, NotApprovedError, OfferTokenIdError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { User } from "../../entities/user.entity";
@@ -48,7 +48,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
     }
 
     public async getOffers(dest: IDestination): Promise<bigint[]> {
-        const [address] = await this.parseDestination(dest);
+        const [address] = await parseDestination(this._userService, dest);
         this._logger.verbose(`Retrieving offers for address: ${address}`);
         const offer = await this._contractService.offerContract();
         const balance = await offer.balanceOf(address);
@@ -65,7 +65,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
     }
 
     public async create(to: IDestination, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransfer> {
-        const [toAddress, toWallet] = await this.parseDestination(to);
+        const [toAddress, toWallet] = await parseDestination(this._userService, to);
         this._logger.verbose(`Mint offer type: ${offerType}, to: ${toAddress}, spent: ${amount} tokens`);
         const adminWallet = this._walletService.getAdminWallet();
         const adminToken = await this._contractService.tokenContract(adminWallet);
@@ -122,7 +122,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
     }
 
     public async transfer(from: ISource, to: IDestination, tokenId: bigint): Promise<RawTransfer> {
-        const [toAddress] = await this.parseDestination(to);
+        const [toAddress] = await parseDestination(this._userService, to);
         this._logger.verbose(`Transfer offer: ${formatTokenId(tokenId)} from user: ${from.userId}, to: ${toAddress} ${toAdminString(from)}`);
         const wallet = await this._userService.getUserWallet(from.userId);
         const offer = await this._contractService.offerContract(wallet);

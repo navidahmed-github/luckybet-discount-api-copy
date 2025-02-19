@@ -7,6 +7,7 @@ import { DeployedContract } from "../../entities/contract.entity";
 import { User } from "../../entities/user.entity";
 import { UserModule } from "../user/user.module";
 import { ContractService } from "../../services/contract.service";
+import { WalletService } from "../../services/wallet.service";
 import { EthereumProviderService } from "../../services/ethereumProvider.service";
 import { StakeService } from "./stake.service";
 import { StakeController } from "./stake.controller";
@@ -22,6 +23,10 @@ import { StakeController } from "./stake.controller";
             useClass: ContractService,
         },
         {
+            provide: ProviderTokens.WalletService,
+            useClass: WalletService,
+        },
+        {
             provide: ProviderTokens.EthereumProviderService,
             useClass: EthereumProviderService,
         },
@@ -32,4 +37,4 @@ import { StakeController } from "./stake.controller";
     ]
 })
 
-export class StakeModule {}
+export class StakeModule { }
