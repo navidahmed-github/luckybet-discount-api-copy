@@ -1,11 +1,11 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Put, Query, Request } from "@nestjs/common";
 import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiInternalServerErrorResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam } from "@nestjs/swagger";
 import { ProviderTokens } from "../../providerTokens";
-import { ApiQueryAddress, ApiQueryUserId } from "../../common.types";
+import { ApiQueryAddress, ApiQueryUserId, fromTokenNative, toTokenNative } from "../../common.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { DeployedContract } from "../../entities/contract.entity";
-import { IStakeService, StakeCommand, StakeContractDTO, StakeHistoryDTO, StakeStatusDTO, UserWithdrawDTO } from "./stake.types";
+import { DepositStakeCommand, IStakeService, StakeContractDTO, StakeHistoryDTO, StakeStatusDTO, StakeWithdrawDTO } from "./stake.types";
 
 @Controller("stakes")
 @ApiBearerAuth()
@@ -99,8 +99,8 @@ export class StakeController {
         type: String,
     })
     @ApiOkResponse({ description: "Deposit was successful" })
-    async deposit(@Request() req, @Body() cmd: StakeCommand, @Param("address") address: string): Promise<void> {
-        await this._stakeService.deposit(address, req.user.id, BigInt(cmd.amount));
+    async deposit(@Request() req, @Body() cmd: DepositStakeCommand, @Param("address") address: string): Promise<void> {
+        await this._stakeService.deposit(address, req.user.id, toTokenNative(cmd.amount));
     }
 
     @Post(":address/withdraw")
@@ -114,11 +114,11 @@ export class StakeController {
     })
     @ApiOkResponse({
         description: "Withdraw was successful",
-        type: UserWithdrawDTO
+        type: StakeWithdrawDTO
     })
-    async withdraw(@Request() req, @Param("address") address: string): Promise<UserWithdrawDTO> {
+    async withdraw(@Request() req, @Param("address") address: string): Promise<StakeWithdrawDTO> {
         const stake = await this._stakeService.withdraw(address, req.user.id);
-        return { staked: stake.stakedAmount, rewards: stake.withdraw.rewardAmount };
+        return { staked: fromTokenNative(BigInt(stake.stakedAmount)), rewards: fromTokenNative(BigInt(stake.withdraw.rewardAmount)) };
     }
 
     private toDTO(contract: DeployedContract): StakeContractDTO {

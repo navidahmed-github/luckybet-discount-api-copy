@@ -4,7 +4,7 @@ import { MongoRepository } from "typeorm";
 import { Contract, isAddress, ZeroAddress } from "ethers";
 import { v4 as uuid_v4 } from 'uuid';
 import { ProviderTokens } from "../../providerTokens";
-import { IDestination, ISource, OperationStatus, parseDestination, toAdminString } from "../../common.types";
+import { fromTokenNative, IDestination, ISource, OperationStatus, parseDestination, toAdminString, toTokenNative } from "../../common.types";
 import { AirdropCannotCreateError, AirdropNotFoundError, DestinationInvalidError, InsufficientBalanceError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { AirdropChunk } from "../../entities/airdrop.entity";
@@ -13,7 +13,7 @@ import { TransferService } from "../../services/transfer.service";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
 import { IJobService } from "../job/job.types";
-import { TokenHistoryDTO, ITokenService, AirdropStatus } from "./token.types";
+import { TokenHistoryDTO, ITokenService, AirdropStatusDTO } from "./token.types";
 
 const AIRDROP_MAX_MINT_PER_TX = 10;
 const AIRDROP_JOB_NAME = "airdropTask";
@@ -51,7 +51,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
     }
 
     public async getHistory(dest: IDestination): Promise<TokenHistoryDTO[]> {
-        return super.getHistory(dest, "token", t => t.token)
+        return super.getHistory(dest, "token", t => ({ amount: fromTokenNative(BigInt(t.token.amount)) }))
     }
 
     public async create(to: IDestination, amount: bigint): Promise<RawTransfer> {
@@ -163,7 +163,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         }
     }
 
-    public async airdropStatus(requestId: string): Promise<AirdropStatus> {
+    public async airdropStatus(requestId: string): Promise<AirdropStatusDTO> {
         const chunks = await this._airdropRepository.find({ where: { requestId } });
         if (!chunks.length) {
             throw new AirdropNotFoundError(requestId);

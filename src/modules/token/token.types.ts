@@ -1,66 +1,76 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
 import { DestinationDTO, DestinationErrorDTO, IDestination, ISource, OperationStatus, TransferHistoryDTO } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 
-export class AirdropCommand {
-    amount: string;
-
-    @ApiProperty({
-        description: "Destinations to mint tokens to",
-        type: () => DestinationDTO,
-        isArray: true
-    })
-    destinations: DestinationDTO[];
-}
-
-export class AirdropResponse {
-    requestId: string;
-}
-
-export class AirdropStatus {
-    status: OperationStatus;
-
-    errors?: DestinationErrorDTO[];
-}
-
 export class CreateTokenCommand {
     @ApiProperty({
-        description: "Where to transfer token to",
+        description: "Destination to transfer discount token to",
         type: () => DestinationDTO,
     })
     to: DestinationDTO;
 
     @IsNotEmpty()
     @ApiProperty({
-        description: "The amount of the token to transfer",
-        type: String,
+        description: "Amount of discount token to transfer",
+        type: Number,
     })
-    amount: string;
+    amount: number;
 }
 
 export class TransferTokenCommand extends CreateTokenCommand {
-    @ApiProperty({
+    @ApiPropertyOptional({
         description: "Identifier of user to transfer token from (admin only)",
         type: String,
     })
     fromUserId?: string;
 }
 
+export class AirdropCommand {
+    @IsNotEmpty()
+    @ApiProperty({
+        description: "Amount of discount token to airdrop to each destination",
+        type: Number,
+    })
+    amount: number;
+
+    @ApiProperty({
+        description: "Destinations to airdrop tokens to",
+        type: () => DestinationDTO,
+        isArray: true
+    })
+    destinations: DestinationDTO[];
+}
+
+export class AirdropResponseDTO {
+    @ApiProperty({
+        description: "Identifier which can be used to query status",
+        type: Number,
+    })
+    requestId: string;
+}
+
+export class AirdropStatusDTO {
+    status: OperationStatus;
+
+    errors?: DestinationErrorDTO[];
+}
+
+
 export class TokenBalanceDTO {
     @ApiProperty({
         description: "Balance for user",
-        type: String
+        type: Number
     })
-    balance: string;
+    balance: number;
 }
 
 export class TokenHistoryDTO extends TransferHistoryDTO {
     @ApiProperty({
         description: "Amount of tokens transferred",
-        type: String,
+        type: Number,
     })
-    amount: string;
+    amount: number;
 }
 
 export class TokenTransferDTO {
@@ -89,10 +99,10 @@ export class TokenTransferDTO {
     txHash: string;
 
     @ApiProperty({
-        description: "The amount of tokens transferred",
-        type: String,
+        description: "Amount of tokens transferred",
+        type: Number,
     })
-    amount: string;
+    amount: number;
 }
 
 export interface ITokenService {
@@ -102,5 +112,5 @@ export interface ITokenService {
     destroy(amount: bigint): Promise<void>;
     transfer(from: ISource, to: IDestination, amount: bigint): Promise<RawTransfer>;
     airdrop(destinations: IDestination[], amount: bigint): Promise<string>;
-    airdropStatus(requestId: string): Promise<AirdropStatus>;
+    airdropStatus(requestId: string): Promise<AirdropStatusDTO>;
 }

@@ -4,7 +4,7 @@ import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
 import { Contract, EventLog, id, JsonRpcApiProvider, Log, TransactionReceipt } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { IDestination, parseDestination, toNumberSafe } from "../../common.types";
+import { fromTokenNative, IDestination, parseDestination, toNumberSafe } from "../../common.types";
 import { InsufficientBalanceError, MONGO_DUPLICATE_KEY, StakeAlreadyExistsError, StakeCannotCreateError, StakeError, StakeMissingAddressError, StakeNotFoundError } from "../../error.types";
 import { IUserService } from "../user/user.types";
 import { DepositStake, RawStake, Stake, WithdrawStake } from "../../entities/stake.entity";
@@ -111,22 +111,32 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
             where: { stakerAddress: address },
             order: { blockTimestamp: "ASC" }
         })
-        return stakes.map(toHistory);
+        return stakes.map(toHistory).filter(Boolean);
 
         function toHistory(stake: Stake): StakeHistoryDTO {
-            const dto = stake.withdraw ?
-                { type: StakeType.Withdrawal, rewardAmount: stake.withdraw.rewardAmount } :
-                { type: StakeType.Deposit }
-            return { ...dto, contractAddress: stake.contractAddress, stakedAmount: stake.stakedAmount, timestamp: stake.blockTimestamp }
+            try {
+                const dto = stake.withdraw ?
+                    { type: StakeType.Withdrawal, rewardAmount: fromTokenNative(BigInt(stake.withdraw.rewardAmount)) } :
+                    { type: StakeType.Deposit }
+                return {
+                    ...dto,
+                    contractAddress: stake.contractAddress,
+                    stakedAmount: fromTokenNative(BigInt(stake.stakedAmount)),
+                    timestamp: stake.blockTimestamp
+                };
+            } catch (err) {
+                this._logger.error(`Failed to parse history record with txHash: ${stake.txHash}, reason: ${err.message}`);
+                return null;
+            }
         }
     }
 
     public async getStatus(contractAddress: string, userId: string): Promise<StakeStatusDTO> {
         const wallet = await this._userService.getUserWallet(userId);
         const staking = await this._contractService.stakeContract(contractAddress);
-        const locked = (await staking.lockedAmount(wallet.address)).toString();
-        const unlocked = (await staking.unlockedAmount(wallet.address)).toString();
-        const reward = (await staking.rewardAmount(wallet.address)).toString();
+        const locked = fromTokenNative(await staking.lockedAmount(wallet.address));
+        const unlocked = fromTokenNative(await staking.unlockedAmount(wallet.address));
+        const reward = fromTokenNative(await staking.rewardAmount(wallet.address));
         return { unlocked, locked, reward };
     }
 

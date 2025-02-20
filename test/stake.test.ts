@@ -142,9 +142,9 @@ describe("Staking", () => {
         }));
 
         let status = await stakeService.getStatus(contractAddresses[0], user.userId);
-        expect(status).toEqual(expect.objectContaining({ locked: "200", unlocked: "300", reward: "50" }));
+        expect(status).toEqual(expect.objectContaining({ locked: 200, unlocked: 300, reward: 50 }));
         status = await stakeService.getStatus(contractAddresses[1], user.userId);
-        expect(status).toEqual(expect.objectContaining({ locked: "400", unlocked: "600", reward: "100" }));
+        expect(status).toEqual(expect.objectContaining({ locked: 400, unlocked: 600, reward: 100 }));
 
         rawStake = await stakeService.withdraw(contractAddresses[0], user.userId)
         expect(rawStake).toEqual(expect.objectContaining({
@@ -153,9 +153,9 @@ describe("Staking", () => {
 
         const history = await stakeService.getHistory({ userId: user.userId });
         const expected = [
-            { type: StakeType.Deposit, contractAddress: contractAddresses[0], stakedAmount: "500" },
-            { type: StakeType.Deposit, contractAddress: contractAddresses[1], stakedAmount: "1000" },
-            { type: StakeType.Withdrawal, contractAddress: contractAddresses[0], stakedAmount: "300", rewardAmount: "50" }
+            { type: StakeType.Deposit, contractAddress: contractAddresses[0], stakedAmount: 500 },
+            { type: StakeType.Deposit, contractAddress: contractAddresses[1], stakedAmount: 1000 },
+            { type: StakeType.Withdrawal, contractAddress: contractAddresses[0], stakedAmount: 300, rewardAmount: 50 }
         ]
         expect(history.length).toEqual(expected.length);
         for (let i = 0; i < expected.length; i++)

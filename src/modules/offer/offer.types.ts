@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
 import { DestinationDTO, IDestination, ISource, MimeType, TransferHistoryDTO } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
@@ -15,37 +15,20 @@ export class CreateOfferCommand {
     @IsNotEmpty()
     @ApiProperty({
         description: "Amount of discount tokens to spend on offer",
-        type: String,
+        type: Number,
     })
-    amount: string;
+    amount: number;
 
-    @ApiProperty({
+    @ApiPropertyOptional({
         description: "Additional information to store related to transaction",
         type: String,
     })
     additionalInfo?: string;
 }
 
-export class CreateTemplateCommand {
-    @IsNotEmpty()
-    @ApiProperty({
-        description: "Name of offer",
-        type: String,
-    })
-    name: string;
-
-    @IsNotEmpty()
-    @ApiProperty({
-        description: "Description of offer",
-        type: String,
-    })
-    description: string;
-
-    attributes: object;
-}
-
 export class TransferOfferCommand {
-    @ApiProperty({
+    @IsNotEmpty()
+    @ApiPropertyOptional({
         description: "Identifier of user to transfer offer from (admin only)",
         type: String,
     })
@@ -59,7 +42,7 @@ export class TransferOfferCommand {
     
     @IsNotEmpty()
     @ApiProperty({
-        description: "Offer to transfer",
+        description: "Token identifier of offer to transfer",
         type: String,
     })
     tokenId: string;
@@ -68,21 +51,42 @@ export class TransferOfferCommand {
 export class ActivateOfferCommand {
     @IsNotEmpty()
     @ApiProperty({
-        description: "Offer to activate",
+        description: "Token identifier of offer to activate",
         type: String,
     })
     tokenId: string;
 }
 
-export class OfferHistoryDTO extends TransferHistoryDTO {
+export class CreateTemplateCommand {
     @IsNotEmpty()
     @ApiProperty({
-        description: "Offer transferred",
+        description: "Name of offer type",
+        type: String,
+    })
+    name: string;
+
+    @IsNotEmpty()
+    @ApiProperty({
+        description: "Description of offer type",
+        type: String,
+    })
+    description: string;
+
+    @ApiProperty({
+        description: "Attributes for offer type",
+        type: Object,
+    })
+    attributes: object;
+}
+
+export class OfferHistoryDTO extends TransferHistoryDTO {
+    @ApiProperty({
+        description: "Token identifier of offer transferred",
         type: String,
     })
     tokenId: string;
 
-    @ApiProperty({
+    @ApiPropertyOptional({
         description: "Additional information related to transaction",
         type: String,
     })

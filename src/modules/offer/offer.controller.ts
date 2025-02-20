@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiForbiddenResponse, ApiNoContentResponse, ApiOkRespons
 import { FileInterceptor } from "@nestjs/platform-express";
 import { createReadStream } from "fs";
 import { ProviderTokens } from "../../providerTokens";
-import { ApiQueryAddress, ApiQueryUserId, formatTokenId, MimeType } from "../../common.types";
+import { ApiQueryAddress, ApiQueryUserId, formatTokenId, MimeType, toTokenNative } from "../../common.types";
 import { OfferNotFoundError, OfferTokenIdError, UserMissingIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
@@ -121,7 +121,7 @@ export class OfferController {
         @Param("offerType", new ParseIntPipe()) offerType: number,
     ): Promise<RawTransfer> {
         await this.checkPartnerPermission(offerType, req);
-        return this._offerService.create(cmd.to, offerType, BigInt(cmd.amount), cmd.additionalInfo);
+        return this._offerService.create(cmd.to, offerType, toTokenNative(cmd.amount), cmd.additionalInfo);
     }
 
     @Post("transfer")

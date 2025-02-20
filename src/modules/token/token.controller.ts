@@ -1,11 +1,11 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, Request } from "@nestjs/common";
 import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiInternalServerErrorResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam } from "@nestjs/swagger";
 import { ProviderTokens } from "../../providerTokens";
-import { ApiQueryAddress, ApiQueryUserId } from "../../common.types";
+import { ApiQueryAddress, ApiQueryUserId, fromTokenNative, toTokenNative } from "../../common.types";
 import { UserMissingIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
-import { TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, AirdropCommand, AirdropResponse, AirdropStatus, CreateTokenCommand } from "./token.types";
+import { TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, AirdropCommand, AirdropResponseDTO, AirdropStatusDTO, CreateTokenCommand } from "./token.types";
 
 @Controller("tokens")
 @ApiBearerAuth()
@@ -29,7 +29,7 @@ export class TokenController {
     async balance(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<TokenBalanceDTO> {
         const dest = req.user.role === Role.Admin ? { userId, address } : { userId: req.user.id };
         const balance = await this._tokenService.getBalance(dest);
-        return { balance: balance.toString() };
+        return { balance: fromTokenNative(balance) };
     }
 
     @Get("history")
@@ -57,8 +57,8 @@ export class TokenController {
     @ApiInternalServerErrorResponse({ description: "Failed to mint tokens" })
     @HttpCode(HttpStatus.CREATED)
     async create(@Body() cmd: CreateTokenCommand): Promise<TokenTransferDTO> {
-        const rawTransfer = await this._tokenService.create(cmd.to, BigInt(cmd.amount));
-        return { ...rawTransfer, amount: rawTransfer.token.amount }
+        const rawTransfer = await this._tokenService.create(cmd.to, toTokenNative(cmd.amount));
+        return { ...rawTransfer, amount: fromTokenNative(BigInt(rawTransfer.token.amount)) }
     }
 
     @Delete(":amount")
@@ -92,8 +92,8 @@ export class TokenController {
         if (!userId) {
             throw new UserMissingIdError();
         }
-        const rawTransfer = await this._tokenService.transfer({ userId, asAdmin }, cmd.to, BigInt(cmd.amount));
-        return { ...rawTransfer, amount: rawTransfer.token.amount };
+        const rawTransfer = await this._tokenService.transfer({ userId, asAdmin }, cmd.to, toTokenNative(cmd.amount));
+        return { ...rawTransfer, amount: fromTokenNative(BigInt(rawTransfer.token.amount)) };
     }
 
     @Post("airdrop")
@@ -101,8 +101,8 @@ export class TokenController {
     @ApiOperation({ summary: "Mint tokens to multiple destinations" })
     @ApiOkResponse({ description: "The minting request was submitted successfully" })
     @HttpCode(HttpStatus.ACCEPTED)
-    async airdrop(@Body() cmd: AirdropCommand): Promise<AirdropResponse> {
-        const requestId = await this._tokenService.airdrop(cmd.destinations, BigInt(cmd.amount));
+    async airdrop(@Body() cmd: AirdropCommand): Promise<AirdropResponseDTO> {
+        const requestId = await this._tokenService.airdrop(cmd.destinations, toTokenNative(cmd.amount));
         return { requestId };
     }
 
@@ -116,7 +116,7 @@ export class TokenController {
         type: String,
     })
     @ApiOkResponse({ description: "The status was successfully returned" })
-    async airdropStatus(@Param("requestId") requestId: string): Promise<AirdropStatus> {
+    async airdropStatus(@Param("requestId") requestId: string): Promise<AirdropStatusDTO> {
         return await this._tokenService.airdropStatus(requestId);
     }
 }

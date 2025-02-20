@@ -1,27 +1,61 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IDestination } from "../../common.types";
 import { RawStake } from "../../entities/stake.entity";
 import { DeployedContract } from "../../entities/contract.entity";
+import { IsNotEmpty } from "class-validator";
 
 export enum StakeType {
     Deposit = 'Deposit',
     Withdrawal = 'Withdrawal'
 }
 
-export class StakeContractDTO {
-    address: string; // !!
+export class DepositStakeCommand {
+    @IsNotEmpty()
+    @ApiProperty({
+        description: "Amount to stake",
+        type: Number,
+    })
+    amount: number;
+}
 
+export class StakeContractDTO {
+    @ApiProperty({
+        description: "Deployed address of staking contract",
+        type: String,
+    })
+    address: string;
+
+    @ApiProperty({
+        description: "Reward percentage given once lock time has expired",
+        type: Number,
+    })
     rewardPercentage: number;
 
+    @ApiProperty({
+        description: "Minimum time in seconds stake will be held before it can be released",
+        type: String,
+    })
     lockTime: number;
 }
 
 export class StakeStatusDTO {
-    locked: string;
+    @ApiProperty({
+        description: "Amount of stake locked in contract (ie. not able to be withdrawn)",
+        type: Number,
+    })
+    locked: number;
 
-    unlocked: string;
+    @ApiProperty({
+        description: "Amount of stake unlocked in contract (ie. able to be withdrawn)",
+        type: Number,
+    })
+    unlocked: number;
 
-    reward: string;
+    @ApiProperty({
+        description: "Amount of tokens which will be returned as a reward once unlocked stake withdrawn",
+        type: Number,
+    })
+    reward: number // !! inconsistent reward vs rewardAmount
 }
 
 export class StakeHistoryDTO {
@@ -32,22 +66,22 @@ export class StakeHistoryDTO {
     type: StakeType;
 
     @ApiProperty({
-        description: "Address of staking contract",
+        description: "Deployed address of staking contract",
         type: String,
     })
     contractAddress: string;
 
     @ApiProperty({
         description: "Amount staked/returned",
-        type: String,
+        type: Number,
     })
-    stakedAmount: string;
+    stakedAmount: number;
 
-    @ApiProperty({
+    @ApiPropertyOptional({
         description: "Reward amount for withdrawals",
-        type: String,
+        type: Number,
     })
-    rewardAmount?: string;
+    rewardAmount?: number;
 
     @ApiProperty({
         description: "Timestamp when the event occurred",
@@ -56,26 +90,18 @@ export class StakeHistoryDTO {
     timestamp: number;
 }
 
-export class UserWithdrawDTO {
+export class StakeWithdrawDTO {
     @ApiProperty({
-        description: "Amount staked",
-        type: String,
+        description: "Amount of stake returned",
+        type: Number,
     })
-    staked: string;
+    staked: number;
 
     @ApiProperty({
-        description: "Amount staked",
-        type: String,
+        description: "Amount of reward returned",
+        type: Number,
     })
-    rewards: string;
-}
-
-export class StakeCommand {
-    @ApiProperty({
-        description: "Amount to stake",
-        type: String,
-    })
-    amount: string;
+    rewards: number;
 }
 
 export interface IStakeService {

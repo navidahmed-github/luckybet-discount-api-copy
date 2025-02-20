@@ -81,25 +81,27 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
         return (await transfers.toArray()).map(toHistory).filter(Boolean);
 
         function toHistory(transfer: Transfer & { fromUser: User[], toUser: User[] }): T | null {
-            let dto = null;
-            if (transfer.toAddress == address) {
-                const otherUser = transfer.fromUser.length ? { otherUser: transfer.fromUser[0].userId } : {};
-                dto = (transfer.fromAddress == ZeroAddress) ?
-                    { type: TransferType.Mint } :
-                    { type: TransferType.Receive, otherAddress: transfer.fromAddress, ...otherUser };
-            }
-            if (transfer.fromAddress == address) {
-                const otherUser = transfer.toUser.length ? { otherUser: transfer.toUser[0].userId } : {};
-                dto = (transfer.toAddress == ZeroAddress) ?
-                    { type: TransferType.Burn } :
-                    { type: TransferType.Send, otherAddress: transfer.toAddress, ...otherUser };
-            }
-            if (!dto) {
-                this._logger.error(`Failed to parse history record with txHash: ${transfer.txHash}`);
+            try {
+                let dto = null;
+                if (transfer.toAddress == address) {
+                    const otherUser = transfer.fromUser.length ? { otherUser: transfer.fromUser[0].userId } : {};
+                    dto = (transfer.fromAddress == ZeroAddress) ?
+                        { type: TransferType.Mint } :
+                        { type: TransferType.Receive, otherAddress: transfer.fromAddress, ...otherUser };
+                }
+                if (transfer.fromAddress == address) {
+                    const otherUser = transfer.toUser.length ? { otherUser: transfer.toUser[0].userId } : {};
+                    dto = (transfer.toAddress == ZeroAddress) ?
+                        { type: TransferType.Burn } :
+                        { type: TransferType.Send, otherAddress: transfer.toAddress, ...otherUser };
+                }
+                if (!dto) throw new Error("Invalid type");
+                const data = toDtoData(transfer);
+                return { ...dto, ...data, timestamp: transfer.blockTimestamp };
+            } catch (err) {
+                this._logger.error(`Failed to parse history record with txHash: ${transfer.txHash}, reason: ${err.message}`);
                 return null;
             }
-            const data = toDtoData(transfer);
-            return { ...dto, ...data, timestamp: transfer.blockTimestamp };
         }
     }
 

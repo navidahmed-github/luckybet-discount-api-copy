@@ -98,6 +98,23 @@ export const ApiQueryAddress = (description: string, required: boolean = false) 
     type: String,
 })
 
+const TOKEN_DECIMALS = 0n;
+
+export function toTokenNative(amount: number): bigint {
+    return fromNumberSafe(amount * Number(10n ** TOKEN_DECIMALS));
+}
+
+export function fromTokenNative(amount: bigint): number {
+    return toNumberSafe(amount / (10n ** TOKEN_DECIMALS));
+}
+
+export function fromNumberSafe(value: number): bigint {
+    if (value > Number.MAX_SAFE_INTEGER || value < Number.MIN_SAFE_INTEGER) {
+        throw new Error("Number cannot be safely converted to big integer");
+    }
+    return BigInt(Math.trunc(value));
+}
+
 export function toNumberSafe(value: bigint): number {
     if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
         throw new Error("Big integer cannot be safely converted to number");
