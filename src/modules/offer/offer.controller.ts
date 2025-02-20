@@ -8,7 +8,8 @@ import { OfferNotFoundError, OfferTokenIdError, UserMissingIdError } from "../..
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { RawTransfer } from "../../entities/transfer.entity";
-import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, ActivateOfferCommand } from "./offer.types";
+import { Template } from "../../entities/template.entity";
+import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, ActivateOfferCommand, TemplateDTO } from "./offer.types";
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
@@ -41,51 +42,6 @@ export class OfferController {
         @Inject(ProviderTokens.OfferService)
         private _offerService: IOfferService,
     ) { }
-
-    @Get(":tokenId")
-    @ApiOperation({ summary: "Get metadata associated with token identifier" })
-    @ApiParamTokenId("Identifier of offer for which to return metadata")
-    @ApiQuery({
-        name: "detailed",
-        description: "Indicates whether to return additional information about token",
-        required: false
-    })
-    @ApiOkResponse({ description: "The metadata was returned successfully" })
-    async metadata(@Param("tokenId") tokenId: string, @Query("detailed") detailed?: boolean): Promise<any> {
-        const [offerType, offerInstance] = this.parseTokenId(tokenId);
-        const metadata = await this._offerService.getMetadata(offerType, offerInstance, detailed);
-        if (!metadata) {
-            throw new OfferNotFoundError(tokenId);
-        }
-        if (!tokenId.endsWith(".json") || tokenId.length != 69) {
-            throw new OfferTokenIdError("Invalid format for token identifier");
-        }
-        const image = await this._offerService.getImage(offerType, offerInstance);
-        const imagePath = image ? tokenId.replace("json", this.getImageSuffix(image.format)) : DEFAULT_IMAGE_NAME;
-        return { ...metadata, image: process.env.SERVER_URL + "/offers/image/" + imagePath };
-    }
-
-    @Get("image/:tokenId")
-    @ApiOperation({ summary: "Get image associated with token identifier" })
-    @ApiParamTokenId("Identifier of offer for which to return image")
-    @ApiOkResponse({ description: "The image was returned successfully" })
-    @Header('Content-Disposition', 'inline')
-    async img(@Param("tokenId") tokenId: string, @Res({ passthrough: true }) res) {
-        if (tokenId === DEFAULT_IMAGE_NAME) {
-            res.contentType(DEFAULT_IMAGE_TYPE);
-            return new StreamableFile(createReadStream(`assets/${DEFAULT_IMAGE_NAME}`));
-        }
-        const [offerType, offerInstance] = this.parseTokenId(tokenId);
-        const image = await this._offerService.getImage(offerType, offerInstance);
-        if (!image) {
-            throw new OfferNotFoundError(tokenId);
-        }
-        if (!tokenId.endsWith(this.getImageSuffix(image.format))) {
-            throw new OfferTokenIdError("Invalid format for token identifier");
-        }
-        res.contentType(image.format);
-        return new StreamableFile(Buffer.from(image.data.toString('hex'), 'hex'));
-    }
 
     @Get("owned")
     @Roles(Role.Admin, Role.User)
@@ -143,6 +99,18 @@ export class OfferController {
     @ApiOkResponse({ description: "The offer was transferred successfully" })
     async activate(@Request() req, @Body() cmd: ActivateOfferCommand): Promise<RawTransfer> {
         return this._offerService.activate(req.user.id, BigInt(cmd.tokenId));
+    }
+
+    @Get("template")
+    @Roles(Role.Admin, Role.Partner)
+    @ApiOperation({ summary: "Get all templates" })
+    @ApiOkResponse({
+        description: "Templates were returned successfully",
+        type: TemplateDTO,
+        isArray: true,
+    })
+    async getTemplates(): Promise<TemplateDTO[]> {
+        return this._offerService.getTemplates().then(o => o.map(this.toTemplateDTO));
     }
 
     @Put("template/:offerType/:offerInstance?")
@@ -219,6 +187,52 @@ export class OfferController {
         await this._offerService.deleteImage(offerType, offerInstance);
     }
 
+    // DO NOT reorder this method, it should always be last so the more specific overrides above take precedence
+    @Get(":tokenId")
+    @ApiOperation({ summary: "Get metadata associated with token identifier" })
+    @ApiParamTokenId("Identifier of offer for which to return metadata")
+    @ApiQuery({
+        name: "detailed",
+        description: "Indicates whether to return additional information about token",
+        required: false
+    })
+    @ApiOkResponse({ description: "The metadata was returned successfully" })
+    async metadata(@Param("tokenId") tokenId: string, @Query("detailed") detailed?: boolean): Promise<any> {
+        const [offerType, offerInstance] = this.parseTokenId(tokenId);
+        const metadata = await this._offerService.getMetadata(offerType, offerInstance, detailed);
+        if (!metadata) {
+            throw new OfferNotFoundError(tokenId);
+        }
+        if (!tokenId.endsWith(".json") || tokenId.length != 69) {
+            throw new OfferTokenIdError("Invalid format for token identifier");
+        }
+        const image = await this._offerService.getImage(offerType, offerInstance);
+        const imagePath = image ? tokenId.replace("json", this.getImageSuffix(image.format)) : DEFAULT_IMAGE_NAME;
+        return { ...metadata, image: process.env.SERVER_URL + "/offers/image/" + imagePath };
+    }
+
+    @Get("image/:tokenId")
+    @ApiOperation({ summary: "Get image associated with token identifier" })
+    @ApiParamTokenId("Identifier of offer for which to return image")
+    @ApiOkResponse({ description: "The image was returned successfully" })
+    @Header('Content-Disposition', 'inline')
+    async img(@Param("tokenId") tokenId: string, @Res({ passthrough: true }) res) {
+        if (tokenId === DEFAULT_IMAGE_NAME) {
+            res.contentType(DEFAULT_IMAGE_TYPE);
+            return new StreamableFile(createReadStream(`assets/${DEFAULT_IMAGE_NAME}`));
+        }
+        const [offerType, offerInstance] = this.parseTokenId(tokenId);
+        const image = await this._offerService.getImage(offerType, offerInstance);
+        if (!image) {
+            throw new OfferNotFoundError(tokenId);
+        }
+        if (!tokenId.endsWith(this.getImageSuffix(image.format))) {
+            throw new OfferTokenIdError("Invalid format for token identifier");
+        }
+        res.contentType(image.format);
+        return new StreamableFile(Buffer.from(image.data.toString('hex'), 'hex'));
+    }
+
     private async checkPartnerPermission(offerType: number, req) {
         if (req.user.role !== Role.Admin && !(await this._offerService.isOwner(offerType, req.user.partner))) {
             throw new ForbiddenException("Partner does not own this offer type");
@@ -252,5 +266,15 @@ export class OfferController {
             [MimeType.PNG, "89504E470D0A1A0A"]
         ];
         return formats.find(([_, magic]) => data.toString('hex', 0, magic.length / 2).toUpperCase() === magic)?.[0];
+    }
+
+    private toTemplateDTO(template: Template): TemplateDTO {
+        return {
+            offerType: template.offerType,
+            offerInstance: template.offerInstance,
+            name: template.metadata.name,
+            description: template.metadata.description,
+            attributes: template.metadata.attributes
+        };
     }
 }

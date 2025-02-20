@@ -149,6 +149,11 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         });
     }
 
+    public async getTemplates(): Promise<Template[]> {
+        this._logger.verbose("Get templates");
+        return this._templateRepository.find();
+    }
+
     public async createTemplate(offerType: number, metadata: Metadata, offerInstance?: number): Promise<void> {
         this._logger.verbose(`Create template for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
         const id = (await this._templateRepository.findOne({ where: { offerType, offerInstance } }))?.id;
