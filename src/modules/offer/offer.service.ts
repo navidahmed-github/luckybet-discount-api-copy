@@ -88,7 +88,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
             const partnerAddress = this._walletService.getLuckyBetWallet().address; // !! replace with partner wallet
             const txToken = await adminToken.transferFrom(toAddress, partnerAddress, amount);
             const txTokenReceipt = await txToken.wait();
-            txOffer = await adminOffer.mint(toAddress, BigInt(offerType), txTokenReceipt.hash);
+            txOffer = await adminOffer["mint(address,uint128,(bytes32))"](toAddress, BigInt(offerType), txTokenReceipt.hash);
         } else {
             txOffer = await adminOffer.mint(toAddress, BigInt(offerType));
         }
