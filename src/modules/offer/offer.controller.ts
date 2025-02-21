@@ -203,11 +203,11 @@ export class OfferController {
         if (!metadata) {
             throw new OfferNotFoundError(tokenId);
         }
-        if (!tokenId.endsWith(".json") || tokenId.length != 69) {
+        if (tokenId.length != 64) {
             throw new OfferTokenIdError("Invalid format for token identifier");
         }
         const image = await this._offerService.getImage(offerType, offerInstance);
-        const imagePath = image ? tokenId.replace("json", this.getImageSuffix(image.format)) : DEFAULT_IMAGE_NAME;
+        const imagePath = image ? `${tokenId}.${this.getImageSuffix(image.format)}` : DEFAULT_IMAGE_NAME;
         return { ...metadata, image: process.env.SERVER_URL + "/offers/image/" + imagePath };
     }
 
@@ -240,7 +240,7 @@ export class OfferController {
     }
 
     private parseTokenId(tokenId: string): [number, number] {
-        if (tokenId.length > 64) {
+        if (tokenId.length >= 64) {
             const offerType = Number.parseInt(tokenId.slice(0, 32));
             const offerInstance = Number.parseInt(tokenId.slice(32, 64));
             if (!Number.isNaN(offerType) && !Number.isNaN(offerInstance)) {
