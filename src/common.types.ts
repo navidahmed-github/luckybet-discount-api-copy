@@ -78,6 +78,12 @@ export class TransferHistoryDTO {
     otherUser?: string;
 
     @ApiProperty({
+        description: "Transaction hash associated with transfer",
+        type: String,
+    })
+    txHash: string;
+
+    @ApiProperty({
         description: "Timestamp when the event occurred",
         type: Number,
     })

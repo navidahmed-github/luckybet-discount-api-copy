@@ -50,7 +50,7 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
         this._event?.off("Transfer");
     }
 
-    public async getHistory(dest: IDestination, name: string, toDtoData: (t: Transfer) => Omit<T, "type" | "timestamp">): Promise<T[]> {
+    public async getHistory(dest: IDestination, name: string, toDtoData: (t: Transfer) => Omit<T, "type" | "txHash" | "timestamp">): Promise<T[]> {
         const [address] = await parseDestination(this._userService, dest);
         this._logger.verbose(`Retrieving ${name} history for address: ${address}`);
         const lookupPipeline = (prefix: string) => {
@@ -97,7 +97,7 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
                 }
                 if (!dto) throw new Error("Invalid type");
                 const data = toDtoData(transfer);
-                return { ...dto, ...data, timestamp: transfer.blockTimestamp };
+                return { ...dto, ...data, txHash: transfer.txHash, timestamp: transfer.blockTimestamp };
             } catch (err) {
                 this._logger.error(`Failed to parse history record with txHash: ${transfer.txHash}, reason: ${err.message}`);
                 return null;
