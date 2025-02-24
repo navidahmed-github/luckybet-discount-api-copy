@@ -201,6 +201,7 @@ export class MockOfferContract extends MockBaseContract {
 
     constructor(wallet?: Wallet) {
         super(wallet);
+        this["mint(address,uint128,(bytes32))"] = this.mintAdditional;
     }
 
     static reset() {
@@ -256,6 +257,11 @@ export class MockOfferContract extends MockBaseContract {
         MockOfferContract.owners.set(tokenId, to);
         MockOfferContract.instances.set(tokenType, nextInstance);
         return new MockTransactionRequest({ logs: [{ topics: [TRANSFER_TOPIC], args: [0, 0, tokenId] }] });
+    }
+
+    async mintAdditional(to: string, tokenType: bigint, _addtional: string[]): Promise<Partial<TransactionResponse>> {
+        if (!this.isAdmin) throw new Error("Requires administrator rights");
+        return this.mint(to, tokenType);
     }
 
     async burn(tokenId: bigint): Promise<Partial<TransactionResponse>> {
