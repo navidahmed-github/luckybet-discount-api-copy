@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nest
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
-import { Contract, EventLog, id, JsonRpcApiProvider, Log, TransactionReceipt } from "ethers";
+import { Contract, EventLog, id, isAddress, JsonRpcApiProvider, Log, TransactionReceipt } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
 import { fromTokenNative, IDestination, parseDestination, toNumberSafe } from "../../common.types";
 import { InsufficientBalanceError, MONGO_DUPLICATE_KEY, StakeAlreadyExistsError, StakeCannotCreateError, StakeError, StakeMissingAddressError, StakeNotFoundError } from "../../error.types";
@@ -68,6 +68,9 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         if (!address) {
             throw new StakeMissingAddressError();
         }
+        if (!isAddress(address)) {
+            throw new StakeNotFoundError(`Not a valid Ethereum address: ${address}`);
+        }
         const contract = await this._contractRepository.findOne({ where: { address } });
         if (!contract?.stake) {
             throw new StakeNotFoundError(address);
@@ -79,6 +82,9 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         this._logger.verbose(`Adding staking contract: ${address}`);
         if (!address) {
             throw new StakeMissingAddressError();
+        }
+        if (!isAddress(address)) {
+            throw new StakeCannotCreateError(`Not a valid Ethereum address: ${address}`);
         }
         if (await this._contractRepository.findOne({ where: { address } })) {
             throw new StakeAlreadyExistsError(address);

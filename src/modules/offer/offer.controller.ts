@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Header, HttpCode, HttpStatus, Inject, Param, ParseIntPipe, Post, Put, Query, Request, Res, StreamableFile, UnsupportedMediaTypeException, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, ForbiddenException, Get, Header, HttpCode, HttpStatus, Inject, Param, ParseBoolPipe, ParseIntPipe, Post, Put, Query, Request, Res, StreamableFile, UnsupportedMediaTypeException, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { ApiBearerAuth, ApiForbiddenResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiUnsupportedMediaTypeResponse } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { createReadStream } from "fs";
@@ -8,8 +8,8 @@ import { OfferNotFoundError, OfferTokenIdError, UserMissingIdError } from "../..
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { RawTransfer } from "../../entities/transfer.entity";
-import { Template } from "../../entities/template.entity";
-import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, ActivateOfferCommand, TemplateDTO } from "./offer.types";
+import { Metadata, Template } from "../../entities/template.entity";
+import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, ActivateOfferCommand, TemplateDTO, MetadataDetails } from "./offer.types";
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
@@ -194,10 +194,14 @@ export class OfferController {
     @ApiQuery({
         name: "detailed",
         description: "Indicates whether to return additional information about token",
-        required: false
+        required: false,
+        type: Boolean
     })
     @ApiOkResponse({ description: "The metadata was returned successfully" })
-    async metadata(@Param("tokenId") tokenId: string, @Query("detailed") detailed?: boolean): Promise<any> {
+    async metadata(
+        @Param("tokenId") tokenId: string,
+        @Query("detailed", new ParseBoolPipe({ optional: true })) detailed?: boolean
+    ): Promise<Metadata & MetadataDetails & { image: string }> {
         const [offerType, offerInstance] = this.parseTokenId(tokenId);
         const metadata = await this._offerService.getMetadata(offerType, offerInstance, detailed);
         if (!metadata) {
@@ -216,7 +220,7 @@ export class OfferController {
     @ApiParamTokenId("Identifier of offer for which to return image")
     @ApiOkResponse({ description: "The image was returned successfully" })
     @Header('Content-Disposition', 'inline')
-    async img(@Param("tokenId") tokenId: string, @Res({ passthrough: true }) res) {
+    async img(@Param("tokenId") tokenId: string, @Res({ passthrough: true }) res): Promise<StreamableFile> {
         if (tokenId === DEFAULT_IMAGE_NAME) {
             res.contentType(DEFAULT_IMAGE_TYPE);
             return new StreamableFile(createReadStream(`assets/${DEFAULT_IMAGE_NAME}`));

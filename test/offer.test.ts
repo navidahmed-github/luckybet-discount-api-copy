@@ -4,7 +4,7 @@ import { getRepositoryToken } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Contract, Wallet, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../src/providerTokens";
-import { formatTokenId, MimeType } from "../src/common.types";
+import { formatTokenId, getTokenId, MimeType, splitTokenId } from "../src/common.types";
 import { InsufficientBalanceError, NotApprovedError } from "../src/error.types";
 import { Transfer } from "../src/entities/transfer.entity";
 import { Template } from "../src/entities/template.entity";
@@ -31,10 +31,6 @@ describe("Offers", () => {
     let offerContract: Contract;
     let transferRepository: Repository<Transfer>
     let users: User[];
-
-    function getTokenId(tokenType: number, tokenInstance: number): bigint {
-        return (BigInt(tokenType) << 128n) + BigInt(tokenInstance);
-    }
 
     beforeEach(async () => {
         testModule = await Test.createTestingModule({
@@ -132,16 +128,17 @@ describe("Offers", () => {
 
         const offers = await offerService.getOffers({ userId: users[0].userId });
         expect(offers.map(formatTokenId)).toEqual([
-            "0x100000000000000000000000000000001",
-            "0x100000000000000000000000000000002",
-            "0x300000000000000000000000000000002"]);
+            "0x0000000000000000000000000000000100000000000000000000000000000001",
+            "0x0000000000000000000000000000000100000000000000000000000000000002",
+            "0x0000000000000000000000000000000300000000000000000000000000000002"]);
         expect(await offerContract.ownerOf(getTokenId(1, 1))).toEqual(users[0].address);
         expect(await offerContract.ownerOf(getTokenId(1, 2))).toEqual(users[0].address);
         expect(await offerContract.ownerOf(getTokenId(3, 1))).toEqual(users[1].address);
         expect(await offerContract.ownerOf(getTokenId(3, 2))).toEqual(users[0].address);
         expect(transferRepository.save).toHaveBeenCalledTimes(4);
-        const expected = { fromAddress: ZeroAddress, toAddress: users[0].address, offer: { tokenId: formatTokenId(getTokenId(3, 2)) } };
+        const expected: any = { fromAddress: ZeroAddress, toAddress: users[0].address, offer: { offerType: 3, offerInstance: 2 } };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+        expected.offer.tokenId = formatTokenId(getTokenId(3, 2));
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 
@@ -156,12 +153,13 @@ describe("Offers", () => {
         const rawTransfer = await offerService.create({ userId: users[0].userId }, 3, 100n, "More details");
         expect(await offerContract.ownerOf(tokenId)).toEqual(users[0].address);
         expect(transferRepository.save).toHaveBeenCalledTimes(1);
-        const expected = {
+        const expected: any = {
             fromAddress: ZeroAddress,
             toAddress: users[0].address,
-            offer: { tokenId: formatTokenId(tokenId), additionalInfo: "More details" }
+            offer: { ...splitTokenId(tokenId), additionalInfo: "More details" }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+        expected.offer.tokenId = "0x0000000000000000000000000000000300000000000000000000000000000001";
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 
@@ -183,12 +181,13 @@ describe("Offers", () => {
         const rawTransfer = await offerService.create({ address: wallet.address }, 3, 100n);
         expect(await offerContract.ownerOf(tokenId)).toEqual(wallet.address);
         expect(transferRepository.save).toHaveBeenCalledTimes(1);
-        const expected = {
+        const expected: any = {
             fromAddress: ZeroAddress,
             toAddress: wallet.address,
-            offer: { tokenId: formatTokenId(tokenId) }
+            offer: { ...splitTokenId(tokenId) }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+        expected.offer.tokenId = formatTokenId(tokenId);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 
@@ -202,12 +201,13 @@ describe("Offers", () => {
         const rawTransfer = await offerService.activate(users[0].userId, tokenId);
         expect(await offerContract.ownerOf(tokenId)).toEqual(ZeroAddress);
         expect(transferRepository.save).toHaveBeenCalledTimes(2);
-        const expected = {
+        const expected: any = {
             fromAddress: users[0].address,
             toAddress: ZeroAddress,
-            offer: { tokenId: formatTokenId(tokenId) }
+            offer: { ...splitTokenId(tokenId) }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+        expected.offer.tokenId = formatTokenId(tokenId);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 
@@ -220,24 +220,28 @@ describe("Offers", () => {
 
         let rawTransfer = await offerService.transfer({ userId: users[0].userId }, { address: users[1].address }, tokenId);
         expect((await offerService.getOffers({ userId: users[0].userId })).length).toEqual(0);
-        expect(formatTokenId((await offerService.getOffers({ userId: users[1].userId }))[0])).toEqual("0x300000000000000000000000000000001");
-        let expected = {
+        expect(formatTokenId((await offerService.getOffers({ userId: users[1].userId }))[0]))
+            .toEqual("0x0000000000000000000000000000000300000000000000000000000000000001");
+        let expected: any = {
             fromAddress: users[0].address,
             toAddress: users[1].address,
-            offer: { tokenId: formatTokenId(tokenId) }
+            offer: { ...splitTokenId(tokenId) }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+        expected.offer.tokenId = formatTokenId(tokenId);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
 
         rawTransfer = await offerService.transfer({ userId: users[1].userId, asAdmin: true }, { userId: users[2].userId }, tokenId);
         expect((await offerService.getOffers({ userId: users[1].userId })).length).toEqual(0);
-        expect(formatTokenId((await offerService.getOffers({ userId: users[2].userId }))[0])).toEqual("0x300000000000000000000000000000001");
+        expect(formatTokenId((await offerService.getOffers({ userId: users[2].userId }))[0]))
+            .toEqual("0x0000000000000000000000000000000300000000000000000000000000000001");
         expected = {
             fromAddress: users[1].address,
             toAddress: users[2].address,
-            offer: { tokenId: formatTokenId(tokenId) }
+            offer: { ...splitTokenId(tokenId) }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+        expected.offer.tokenId = formatTokenId(tokenId);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
 
         rawTransfer = await offerService.transfer({ userId: users[2].userId }, { address: TEST_ADDRESS }, tokenId);
@@ -246,9 +250,10 @@ describe("Offers", () => {
         expected = {
             fromAddress: users[2].address,
             toAddress: TEST_ADDRESS,
-            offer: { tokenId: formatTokenId(tokenId) }
+            offer: { ...splitTokenId(tokenId) }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
+        expected.offer.tokenId = formatTokenId(tokenId);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 

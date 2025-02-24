@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, Request } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, ParseIntPipe, Post, Query, Request } from "@nestjs/common";
 import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiInternalServerErrorResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam } from "@nestjs/swagger";
 import { ProviderTokens } from "../../providerTokens";
 import { ApiQueryAddress, ApiQueryUserId, fromTokenNative, toTokenNative } from "../../common.types";
@@ -68,13 +68,13 @@ export class TokenController {
         name: "amount",
         description: "Amount of tokens to burn",
         required: true,
-        type: String,
+        type: Number,
     })
     @ApiNoContentResponse({ description: "Tokens were burnt successfully" })
     @ApiInternalServerErrorResponse({ description: "Failed to burn tokens" })
     @HttpCode(HttpStatus.NO_CONTENT)
-    async destroy(@Param("amount") amount: string): Promise<void> {
-        await this._tokenService.destroy(BigInt(amount));
+    async destroy(@Param("amount", new ParseIntPipe()) amount: number): Promise<void> {
+        await this._tokenService.destroy(toTokenNative(amount));
     }
 
     @Post("transfer")

@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
-import { Contract, encodeBytes32String, EventLog, id, TransactionReceipt, ZeroAddress } from "ethers";
+import { Contract, EventLog, id, TransactionReceipt, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { formatTokenId, IDestination, ISource, MimeType, parseDestination, toAdminString } from "../../common.types";
+import { formatTokenId, getTokenId, IDestination, ISource, MimeType, parseDestination, splitTokenId, toAdminString } from "../../common.types";
 import { InsufficientBalanceError, NotApprovedError, OfferTokenIdError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { User } from "../../entities/user.entity";
@@ -11,7 +11,7 @@ import { Metadata, Template } from "../../entities/template.entity";
 import { OfferImage } from "../../entities/image.entity";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
-import { IOfferService, OfferHistoryDTO } from "./offer.types";
+import { IOfferService, MetadataDetails, OfferHistoryDTO } from "./offer.types";
 import { TransferService } from "../../services/transfer.service";
 
 export const TRANSFER_TOPIC = id("Transfer(address,address,uint256)");
@@ -37,10 +37,22 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         super(new Logger(OfferService.name), ethereumProviderService, userRepository);
     }
 
-    public async getMetadata(offerType: number, offerInstance: number, detailed?: boolean): Promise<Metadata> {
+    public async getMetadata(offerType: number, offerInstance: number, detailed?: boolean): Promise<Metadata & MetadataDetails> {
         const [template, overriden] = await this.getWithFallback(this._templateRepository, offerType, offerInstance);
-        // !! return additonalInfo
-        return template?.metadata ? { ...template.metadata, ...(detailed && { usesDefault: !overriden }) } : undefined;
+        if (!template?.metadata) {
+            return undefined
+        } else if (!detailed) {
+            return template.metadata;
+        }
+        const mint = await this._transferRepository.findOne({
+            where: {
+                fromAddress: ZeroAddress,
+                'offer.offerType': offerType,
+                'offer.offerInstance': offerInstance
+            }
+        });
+        const additionalInfo = mint?.offer?.additionalInfo;
+        return { ...template.metadata, usesDefault: !overriden, ...(additionalInfo && { additionalInfo }) };
     }
 
     public async getImage(offerType: number, offerInstance: number): Promise<OfferImage> {
@@ -61,7 +73,11 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
     }
 
     public async getHistory(dest: IDestination): Promise<OfferHistoryDTO[]> {
-        return super.getHistory(dest, "offer", t => t.offer);
+        return super.getHistory(dest, "offer", t => {
+            const tokenId = formatTokenId(getTokenId(t.offer.offerType, t.offer.offerInstance));
+            const additionalInfo = t.offer.additionalInfo ? { additionalInfo: t.offer.additionalInfo } : {};
+            return { tokenId, ...additionalInfo };
+        });
     }
 
     public async create(to: IDestination, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransfer> {
@@ -100,7 +116,8 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
                 throw new OfferTokenIdError("Failed to read token identifier from event");
             }
             this._logger.verbose(`Minted offer: ${formatTokenId(tokenId)}`);
-            return this.saveTransfer(ZeroAddress, toAddress, tokenId, txOfferReceipt.blockNumber, txOfferReceipt.hash, additionalInfo);
+            const rawTransfer = await this.saveTransfer(ZeroAddress, toAddress, tokenId, txOfferReceipt.blockNumber, txOfferReceipt.hash, additionalInfo);
+            return this.addTokenId(rawTransfer, tokenId);
         });
     }
 
@@ -117,7 +134,8 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         const tx = await offer.burn(tokenId);
         return this.lockTransfer(async () => {
             const txReceipt = await tx.wait();
-            return this.saveTransfer(wallet.address, ZeroAddress, tokenId, txReceipt.blockNumber, txReceipt.hash);
+            const rawTransfer = await this.saveTransfer(wallet.address, ZeroAddress, tokenId, txReceipt.blockNumber, txReceipt.hash);
+            return this.addTokenId(rawTransfer, tokenId);
         });
     }
 
@@ -145,7 +163,8 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         }
         return this.lockTransfer(async () => {
             const txReceipt = await tx.wait();
-            return this.saveTransfer(wallet.address, toAddress, tokenId, txReceipt.blockNumber, txReceipt.hash);
+            const rawTransfer = await this.saveTransfer(wallet.address, toAddress, tokenId, txReceipt.blockNumber, txReceipt.hash);
+            return this.addTokenId(rawTransfer, tokenId);
         });
     }
 
@@ -193,12 +212,17 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
     }
 
     protected addTransferData(transfer: Omit<RawTransfer, "token" | "offer">, value: bigint, args: any[]): RawTransfer {
-        const offer = Object.assign({ tokenId: `0x${value.toString(16)}` }, args[0] && { additionalInfo: args[0] });
+        const offerId = splitTokenId(value);
+        const offer = Object.assign(offerId, args[0] && { additionalInfo: args[0] });
         return { ...transfer, offer };
     }
 
     private async getWithFallback<T>(repository: MongoRepository<T>, offerType: number, offerInstance: number): Promise<[T, boolean]> {
         const overriden = await repository.findOne({ where: { offerType, offerInstance } });
         return overriden ? [overriden, true] : [await repository.findOne({ where: { offerType, offerInstance: undefined } }), false];
+    }
+
+    private addTokenId(transfer: RawTransfer, tokenId: bigint): RawTransfer & { offer: { tokenId: string } } {
+        return { ...transfer, offer: { ...transfer.offer, tokenId: formatTokenId(tokenId) } };
     }
 }

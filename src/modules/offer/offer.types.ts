@@ -124,7 +124,11 @@ export class TemplateDTO {
         type: Object,
     })
     attributes: object;
+}
 
+export type MetadataDetails = {
+    usesDefault?: boolean;
+    additionalInfo?: string;
 }
 
 export interface IOfferService {

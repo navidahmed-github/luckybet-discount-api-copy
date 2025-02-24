@@ -9,7 +9,10 @@ export class TokenTransfer {
 @Entity()
 export class OfferTransfer {
 	@Column()
-	tokenId: string;
+	offerType: number;
+
+	@Column()
+	offerInstance: number;
 
 	@Column()
 	additionalInfo?: string;

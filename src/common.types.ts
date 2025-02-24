@@ -133,13 +133,15 @@ export function toAdminString(from: ISource) {
 }
 
 export function formatTokenId(tokenId: bigint) {
-    return `0x${tokenId.toString(16)}`
+    return `0x${tokenId.toString(16).padStart(64, '0')}`
 }
 
-export async function awaitSeconds(seconds: number): Promise<void> {
-    return new Promise<void>(resolve => {
-        setTimeout(() => resolve(), seconds * 1000);
-    });
+export function getTokenId(offerType: number, offerInstance: number): bigint {
+    return (BigInt(offerType) << 128n) + BigInt(offerInstance);
+}
+
+export function splitTokenId(tokenId: bigint): { offerType: number, offerInstance: number } {
+    return { offerType: Number(tokenId >> 128n), offerInstance: Number(tokenId & ((1n << 128n) - 1n)) };
 }
 
 export async function parseDestination(userService: IUserService, to: IDestination): Promise<[string, Wallet?]> {
@@ -155,3 +157,10 @@ export async function parseDestination(userService: IUserService, to: IDestinati
         throw new DestinationInvalidError(`Not a valid Ethereum address: ${to.address}`);
     return [to.address, null];
 }
+
+export async function awaitSeconds(seconds: number): Promise<void> {
+    return new Promise<void>(resolve => {
+        setTimeout(() => resolve(), seconds * 1000);
+    });
+}
+
