@@ -27,7 +27,6 @@ export class CreateOfferCommand {
 }
 
 export class TransferOfferCommand {
-    @IsNotEmpty()
     @ApiPropertyOptional({
         description: "Identifier of user to transfer offer from (admin only)",
         type: String,
@@ -39,22 +38,6 @@ export class TransferOfferCommand {
         type: () => DestinationDTO,
     })
     to: DestinationDTO;
-
-    @IsNotEmpty()
-    @ApiProperty({
-        description: "Token identifier of offer to transfer",
-        type: String,
-    })
-    tokenId: string;
-}
-
-export class ActivateOfferCommand {
-    @IsNotEmpty()
-    @ApiProperty({
-        description: "Token identifier of offer to activate",
-        type: String,
-    })
-    tokenId: string;
 }
 
 export class CreateTemplateCommand {
@@ -112,7 +95,6 @@ export class TemplateDTO {
     })
     name: string;
 
-    @IsNotEmpty()
     @ApiProperty({
         description: "Description of offer type",
         type: String,

@@ -9,7 +9,7 @@ import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { Metadata, Template } from "../../entities/template.entity";
-import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, ActivateOfferCommand, TemplateDTO, MetadataDetails } from "./offer.types";
+import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails } from "./offer.types";
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
@@ -80,25 +80,27 @@ export class OfferController {
         return this._offerService.create(cmd.to, offerType, toTokenNative(cmd.amount), cmd.additionalInfo);
     }
 
-    @Post("transfer")
+    @Post(":tokenId/transfer")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Transfer offers to another user" })
+    @ApiParamTokenId("Identifier of offer to transfer")
     @ApiOkResponse({ description: "The offer was transferred successfully" })
-    async transfer(@Request() req, @Body() cmd: TransferOfferCommand): Promise<RawTransfer> {
+    async transfer(@Request() req, @Body() cmd: TransferOfferCommand, @Param("tokenId") tokenId: string): Promise<RawTransfer> {
         const asAdmin = req.user.role === Role.Admin ? req.user.id : undefined;
         const userId = asAdmin ? cmd.fromUserId : req.user.id;
         if (!userId) {
             throw new UserMissingIdError();
         }
-        return this._offerService.transfer({ userId, asAdmin }, cmd.to, BigInt(cmd.tokenId));
+        return this._offerService.transfer({ userId, asAdmin }, cmd.to, BigInt(tokenId));
     }
 
-    @Post("activate")
+    @Post(":tokenId/activate")
     @Roles(Role.User)
-    @ApiOperation({ summary: "Transfer offers to another user" })
-    @ApiOkResponse({ description: "The offer was transferred successfully" })
-    async activate(@Request() req, @Body() cmd: ActivateOfferCommand): Promise<RawTransfer> {
-        return this._offerService.activate(req.user.id, BigInt(cmd.tokenId));
+    @ApiOperation({ summary: "Mark offer as activated" })
+    @ApiParamTokenId("Identifier of offer to activate")
+    @ApiOkResponse({ description: "The offer was activated successfully" })
+    async activate(@Request() req, @Param("tokenId") tokenId: string): Promise<RawTransfer> {
+        return this._offerService.activate(req.user.id, BigInt(tokenId));
     }
 
     @Get("template")
