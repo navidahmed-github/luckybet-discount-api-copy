@@ -23,12 +23,18 @@ export class RolesGuard implements CanActivate {
 			if ((type !== 'Bearer') || !token) {
 				this.throwUnauthorized("Required JWT not found in request header")
 			}
-			const { sub, role, partner } = await this._jwtService.verifyAsync(token);
+			const { sub, role, partner, iat, exp } = await this._jwtService.verifyAsync(token, { clockTimestamp: Date.now() / 1000 });
 			if (!sub) {
 				this.throwUnauthorized("No user identifier in JWT");
 			}
-			if (Array.isArray(role)) {
+			if (!role || Array.isArray(role)) {
 				this.throwUnauthorized("Only one active role allowed in JWT")
+			}
+			if (!iat) {
+				this.throwUnauthorized("No issued at time in JWT");
+			}
+			if (!exp) {
+				this.throwUnauthorized("No expiry time in JWT");
 			}
 			request['user'] = { id: sub, role, partner };
 			const req = context.switchToHttp().getRequest();

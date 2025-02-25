@@ -32,6 +32,7 @@ import { DeployedContract } from "../entities/contract.entity";
 		JwtModule.register({
 			global: true,
 			secret: process.env.JWT_SECRET,
+			verifyOptions: { ignoreNotBefore: false, ignoreExpiration: false }
 		}),
 		UserModule,
 		TokenModule,
