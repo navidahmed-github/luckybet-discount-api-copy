@@ -174,12 +174,16 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
     }
 
     public async createTemplate(offerType: number, metadata: Metadata, offerInstance?: number): Promise<void> {
+        if (offerInstance === 0)
+            offerInstance = undefined;
         this._logger.verbose(`Create template for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
         const id = (await this._templateRepository.findOne({ where: { offerType, offerInstance } }))?.id;
         await this._templateRepository.save({ ...(id && { id }), offerType, metadata, ...(offerInstance && { offerInstance }) });
     }
 
     public async deleteTemplate(offerType: number, offerInstance?: number): Promise<void> {
+        if (offerInstance === 0)
+            offerInstance = undefined;
         this._logger.verbose(`Delete template for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
         const existing = await this._templateRepository.findOne({ where: { offerType, offerInstance } });
         if (existing) {
@@ -188,12 +192,16 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
     }
 
     public async uploadImage(offerType: number, format: MimeType, data: Buffer, offerInstance?: number): Promise<void> {
+        if (offerInstance === 0)
+            offerInstance = undefined;
         this._logger.verbose(`Upload ${format} for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
         const id = (await this._imageRepository.findOne({ where: { offerType, offerInstance } }))?.id;
         await this._imageRepository.save({ ...(id && { id }), offerType, format, data, ...(offerInstance && { offerInstance }) });
     }
 
     public async deleteImage(offerType: number, offerInstance?: number): Promise<void> {
+        if (offerInstance === 0)
+            offerInstance = undefined;
         this._logger.verbose(`Delete image for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
         const existing = await this._imageRepository.findOne({ where: { offerType, offerInstance } });
         if (existing) {

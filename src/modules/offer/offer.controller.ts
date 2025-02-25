@@ -30,7 +30,7 @@ const ApiParamOfferType = () => ApiParam({
 
 const ApiParamOfferInstance = () => ApiParam({
     name: "offerInstance",
-    description: "Instance of offer",
+    description: "Instance of offer (empty or zero to use as default for type)",
     required: false,
     type: Number,
 });
@@ -204,13 +204,13 @@ export class OfferController {
         @Param("tokenId") tokenId: string,
         @Query("detailed", new ParseBoolPipe({ optional: true })) detailed?: boolean
     ): Promise<Metadata & MetadataDetails & { image: string }> {
+        if (tokenId.length != 64) {
+            throw new OfferTokenIdError("Invalid format for token identifier");
+        }
         const [offerType, offerInstance] = this.parseTokenId(tokenId);
         const metadata = await this._offerService.getMetadata(offerType, offerInstance, detailed);
         if (!metadata) {
             throw new OfferNotFoundError(tokenId);
-        }
-        if (tokenId.length != 64) {
-            throw new OfferTokenIdError("Invalid format for token identifier");
         }
         const image = await this._offerService.getImage(offerType, offerInstance);
         const imagePath = image ? `${tokenId}.${this.getImageSuffix(image.format)}` : DEFAULT_IMAGE_NAME;
@@ -227,13 +227,16 @@ export class OfferController {
             res.contentType(DEFAULT_IMAGE_TYPE);
             return new StreamableFile(createReadStream(`assets/${DEFAULT_IMAGE_NAME}`));
         }
+        if (tokenId.indexOf(".") != 64) {
+            throw new OfferTokenIdError("Invalid format for token identifier");
+        }
         const [offerType, offerInstance] = this.parseTokenId(tokenId);
         const image = await this._offerService.getImage(offerType, offerInstance);
         if (!image) {
             throw new OfferNotFoundError(tokenId);
         }
         if (!tokenId.endsWith(this.getImageSuffix(image.format))) {
-            throw new OfferTokenIdError("Invalid format for token identifier");
+            throw new OfferTokenIdError("Incorrect image type for token identifier");
         }
         res.contentType(image.format);
         return new StreamableFile(Buffer.from(image.data.toString('hex'), 'hex'));
@@ -246,12 +249,10 @@ export class OfferController {
     }
 
     private parseTokenId(tokenId: string): [number, number] {
-        if (tokenId.length >= 64) {
-            const offerType = Number.parseInt(tokenId.slice(0, 32));
-            const offerInstance = Number.parseInt(tokenId.slice(32, 64));
-            if (!Number.isNaN(offerType) && !Number.isNaN(offerInstance)) {
-                return [offerType, offerInstance];
-            }
+        const offerType = Number.parseInt(tokenId.slice(0, 32));
+        const offerInstance = Number.parseInt(tokenId.slice(32, 64));
+        if (!Number.isNaN(offerType) && !Number.isNaN(offerInstance)) {
+            return [offerType, offerInstance];
         }
         throw new OfferTokenIdError("Invalid format for token identifier");
     }
