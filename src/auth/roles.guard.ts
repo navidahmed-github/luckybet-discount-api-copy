@@ -23,7 +23,8 @@ export class RolesGuard implements CanActivate {
 			if ((type !== 'Bearer') || !token) {
 				this.throwUnauthorized("Required JWT not found in request header")
 			}
-			const { sub, role, partner, iat, exp } = await this._jwtService.verifyAsync(token, { clockTimestamp: Date.now() / 1000 });
+			const clockTimestamp = Date.now() / 1000;
+			const { sub, role, partner, iat, exp } = await this._jwtService.verifyAsync(token, { clockTimestamp });
 			if (!sub) {
 				this.throwUnauthorized("No user identifier in JWT");
 			}
@@ -33,6 +34,9 @@ export class RolesGuard implements CanActivate {
 			if (!iat) {
 				this.throwUnauthorized("No issued at time in JWT");
 			}
+			if (iat > clockTimestamp + 600) { // allow for some clock skew
+				this.throwUnauthorized("Issued at is after current time");
+			} 
 			if (!exp) {
 				this.throwUnauthorized("No expiry time in JWT");
 			}
