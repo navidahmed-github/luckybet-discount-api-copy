@@ -57,8 +57,10 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
     public async create(to: IDestination, amount: bigint): Promise<RawTransfer> {
         const [toAddress] = await parseDestination(this._userService, to);
         this._logger.verbose(`Mint tokens to: ${toAddress}, amount: ${amount}`);
-        const admin = this._walletService.getAdminWallet();
-        const token = await this._contractService.tokenContract(admin);
+        const adminWallet = this._walletService.getAdminWallet();
+        const token = await this._contractService.tokenContract(adminWallet);
+
+        await this._walletService.gasWallet(adminWallet);
         const tx = await token.mint(toAddress, amount);
         return this.lockTransfer(async () => {
             const txReceipt = await tx.wait();
@@ -99,6 +101,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         await this._walletService.gasWallet(wallet);
         if (from.asAdmin) {
             const adminWallet = this._walletService.getAdminWallet();
+            await this._walletService.gasWallet(adminWallet);
             const txApprove = await token.approve(adminWallet.address, amount);
             await txApprove.wait();
             const adminToken = await this._contractService.tokenContract(adminWallet);
@@ -180,8 +183,8 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
     }
 
     private airdropProcessor = async (requestId: string, touch: () => Promise<void>) => {
-        const admin = this._walletService.getAdminWallet();
-        const token = await this._contractService.tokenContract(admin);
+        const adminWallet = this._walletService.getAdminWallet();
+        const token = await this._contractService.tokenContract(adminWallet);
         const chunks = await this._airdropRepository.find({ where: { requestId } });
 
         // check whether any chunks are partially processed, this should only happen if the server is stopped and
@@ -215,6 +218,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
             try {
                 this._logger.verbose(`Processing airdrop chunk: ${pending.id} with requestId: ${requestId}`);
                 await touch();
+                await this._walletService.gasWallet(adminWallet);
                 await this._airdropRepository.update(pending.id, { status: OperationStatus.Processing });
                 const tx = await token.mintMany(pending.destinations.map(d => d.address), BigInt(pending.amount));
                 await this._airdropRepository.update(pending.id, { txHash: tx.hash });

@@ -88,6 +88,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         const adminOffer = await this._contractService.offerContract(adminWallet);
         let txOffer;
 
+        await this._walletService.gasWallet(adminWallet);
         if (amount > 0) {
             const toBalance = await adminToken.balanceOf(toAddress);
             if (toBalance < amount) {
@@ -155,6 +156,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         await this._walletService.gasWallet(wallet);
         if (from.asAdmin) {
             const adminWallet = this._walletService.getAdminWallet();
+            await this._walletService.gasWallet(adminWallet);
             const txApprove = await offer.approve(adminWallet.address, tokenId);
             await txApprove.wait();
             const adminOffer = await this._contractService.offerContract(adminWallet);
