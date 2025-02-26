@@ -122,6 +122,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
     }
 
     public async activate(userId: string, tokenId: bigint): Promise<RawTransfer> {
+        this._logger.verbose(`Activate offer: ${formatTokenId(tokenId)} for user: ${userId}`);
         const wallet = await this._userService.getUserWallet(userId);
         const offer = await this._contractService.offerContract(wallet);
 

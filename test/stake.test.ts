@@ -12,7 +12,7 @@ import { IStakeService, StakeType } from "../src/modules/stake/stake.types";
 import { UserService } from "../src/modules/user/user.service";
 import { StakeService } from "../src/modules/stake/stake.service";
 import { IWalletService, WalletService, WalletServiceSettingKeys } from "../src/services/wallet.service";
-import { IContractService } from "../src/services/contract.service";
+import { ContractServiceSettingKeys, IContractService } from "../src/services/contract.service";
 import { MockContractService } from "./mocks/contract.service";
 import { MockProviderService } from "./mocks/ethereumProvider.service";
 import { MockAtomicSequenceService } from "./mocks/atomicSequence.service";
@@ -44,6 +44,9 @@ describe("Staking", () => {
                             }
                             if (key === WalletServiceSettingKeys.WALLET_GAS_AMOUNT) {
                                 return "0.1";
+                            }
+                            if (key === ContractServiceSettingKeys.TOKEN_CONTRACT_ADDRESS) {
+                                return "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955";
                             }
                             return key;
                         },

@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import { ConfigService } from "@nestjs/config";
 import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
 import { Contract, EventLog, id, isAddress, JsonRpcApiProvider, Log, TransactionReceipt } from "ethers";
@@ -9,7 +10,7 @@ import { InsufficientBalanceError, MONGO_DUPLICATE_KEY, StakeAlreadyExistsError,
 import { IUserService } from "../user/user.types";
 import { DepositStake, RawStake, Stake, WithdrawStake } from "../../entities/stake.entity";
 import { DeployedContract } from "../../entities/contract.entity";
-import { IContractService } from "../../services/contract.service";
+import { ContractServiceSettingKeys, IContractService } from "../../services/contract.service";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
 import { IStakeService, StakeHistoryDTO, StakeStatusDTO, StakeType } from "./stake.types";
@@ -21,10 +22,13 @@ export const WITHDRAW_TOPIC = id("Withdrawn(address,uint256,uint256)");
 export class StakeService implements IStakeService, OnModuleInit, OnModuleDestroy {
     private readonly _logger = new Logger(StakeService.name);
     private readonly _provider: JsonRpcApiProvider;
+    private readonly _tokenAddress: string;
     private _disableListener: boolean;
     private _events: Contract[];
 
     constructor(
+        private config: ConfigService,
+
         @Inject(ProviderTokens.UserService)
         private readonly _userService: IUserService,
 
@@ -44,6 +48,7 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         private readonly _contractRepository: MongoRepository<DeployedContract>
     ) {
         this._provider = ethereumProviderService.getProvider();
+        this._tokenAddress = this.config.get(ContractServiceSettingKeys.TOKEN_CONTRACT_ADDRESS);
     }
 
     public async onModuleInit() {
@@ -97,9 +102,12 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         } catch {
             throw new StakeCannotCreateError(`Staking contract not detected at ${address}`);
         }
+        if (await staking.underlyingToken() != this._tokenAddress) {
+            throw new StakeCannotCreateError("Staking contract underlying token mismatch")
+        }
         try {
             const lockTime = toNumberSafe(await staking.lockTime());
-            const rewardPercentage = toNumberSafe(await staking.rewardPercentage()) / 100.0;
+            const rewardPercentage = 100 * toNumberSafe(await staking.rewardPercentage()) / toNumberSafe(await staking.REWARD_DIVISOR());
             await this._contractRepository.save({ address, stake: { rewardPercentage, lockTime } });
             return await this.getByAddress(address);
         } catch (err) {

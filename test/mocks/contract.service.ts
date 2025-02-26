@@ -145,6 +145,14 @@ export class MockStakeContract extends MockBaseContract {
         MockStakeContract.closed = false;
     }
 
+    async REWARD_DIVISOR(): Promise<bigint> {
+        return 10n ** 4n;
+    }
+
+    async underlyingToken(): Promise<string> {
+        return "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955";
+    }
+
     async supportsInterface(interfaceId: string): Promise<boolean> {
         return interfaceId == "0x2919aabb";
     }
