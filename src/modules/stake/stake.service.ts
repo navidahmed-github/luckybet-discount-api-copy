@@ -94,6 +94,7 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         if (await this._contractRepository.findOne({ where: { address } })) {
             throw new StakeAlreadyExistsError(address);
         }
+
         const staking = await this._contractService.stakeContract(address);
         try {
             if (!await staking.supportsInterface("0x2919aabb")) {
@@ -105,6 +106,12 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         if (await staking.underlyingToken() != this._tokenAddress) {
             throw new StakeCannotCreateError("Staking contract underlying token mismatch")
         }
+        const token = await this._contractService.tokenContract();
+        const MINTER_ROLE = await token.MINTER_ROLE();
+        if (!await token.hasRole(MINTER_ROLE, address)) {
+            throw new StakeCannotCreateError("Staking contract does not have mint permission")
+        }
+
         try {
             const lockTime = toNumberSafe(await staking.lockTime());
             const rewardPercentage = 100 * toNumberSafe(await staking.rewardPercentage()) / toNumberSafe(await staking.REWARD_DIVISOR());
