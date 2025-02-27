@@ -4,7 +4,7 @@ import { MongoRepository } from "typeorm";
 import { Contract, isAddress, ZeroAddress } from "ethers";
 import { v4 as uuid_v4 } from 'uuid';
 import { ProviderTokens } from "../../providerTokens";
-import { fromTokenNative, IDestination, ISource, OperationStatus, parseDestination, toAdminString, toTokenNative } from "../../common.types";
+import { awaitSeconds, fromTokenNative, IDestination, ISource, OperationStatus, parseDestination, toAdminString, toTokenNative } from "../../common.types";
 import { AirdropCannotCreateError, AirdropNotFoundError, DestinationInvalidError, InsufficientBalanceError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { AirdropChunk } from "../../entities/airdrop.entity";
@@ -225,6 +225,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
                 await tx.wait();
                 await this._airdropRepository.update(pending.id, { status: OperationStatus.Complete });
                 this._logger.verbose(`Processed airdrop chunk: ${pending.id}`);
+                await awaitSeconds(5);
             } catch (err) {
                 const error = `Failed to process airdrop chunk: ${pending.id}, reason: ${err.message}`;
                 this._logger.error(error, err.stack);
