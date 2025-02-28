@@ -1,6 +1,6 @@
 import { ApiProperty, ApiQuery } from "@nestjs/swagger";
-import { isAddress, Wallet } from "ethers";
-import { DestinationInvalidError } from "./error.types";
+import { Contract, isAddress, Wallet } from "ethers";
+import { ContractError, DestinationInvalidError } from "./error.types";
 import { IUserService } from "./modules/user/user.types";
 
 export enum OperationStatus {
@@ -158,9 +158,31 @@ export async function parseDestination(userService: IUserService, to: IDestinati
     return [to.address, null];
 }
 
+export function extractCustomSolidityError(error: any, contractInterface: any): string | undefined {
+    if (error?.data) {
+        try {
+            return contractInterface.parseError(error.data)?.name;
+        } catch (err) {
+            return err.toString();
+        }
+    }
+    return undefined;
+}
+
+export async function callContract<T>(action: () => Promise<T>, contract: Contract) {
+    try {
+        return await action();
+    } catch (err) {
+        const customError = extractCustomSolidityError(err, contract.interface);
+        if (customError) {
+            throw new ContractError(customError);
+        }
+        throw err;
+    }
+}
+
 export async function awaitSeconds(seconds: number): Promise<void> {
     return new Promise<void>(resolve => {
         setTimeout(() => resolve(), seconds * 1000);
     });
 }
-

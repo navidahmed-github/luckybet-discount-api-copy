@@ -153,6 +153,13 @@ export class StakeAlreadyExistsError extends EntityAlreadyExistsError {
 	}
 }
 
+export class StakeWithdrawError extends StakeError {
+	constructor(message: string) {
+		super(message);
+		this.name = StakeWithdrawError.name;
+	}
+}
+
 //=== Miscellaneous errors
 export class DestinationInvalidError extends Error {
 	constructor(msg: string) {
@@ -172,5 +179,12 @@ export class NotApprovedError extends Error {
 	constructor(msg: string) {
 		super(msg);
 		this.name = NotApprovedError.name;
+	}
+}
+
+export class ContractError extends Error {
+	constructor(msg: string) {
+		super(msg);
+		this.name = ContractError.name;
 	}
 }

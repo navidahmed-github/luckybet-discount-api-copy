@@ -4,7 +4,7 @@ import { MongoRepository } from "typeorm";
 import { Contract, isAddress, ZeroAddress } from "ethers";
 import { v4 as uuid_v4 } from 'uuid';
 import { ProviderTokens } from "../../providerTokens";
-import { awaitSeconds, fromTokenNative, IDestination, ISource, OperationStatus, parseDestination, toAdminString, toTokenNative } from "../../common.types";
+import { awaitSeconds, callContract, fromTokenNative, IDestination, ISource, OperationStatus, parseDestination, toAdminString, toTokenNative } from "../../common.types";
 import { AirdropCannotCreateError, AirdropNotFoundError, DestinationInvalidError, InsufficientBalanceError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { AirdropChunk } from "../../entities/airdrop.entity";
@@ -61,7 +61,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         const token = await this._contractService.tokenContract(adminWallet);
 
         await this._walletService.gasWallet(adminWallet);
-        const tx = await token.mint(toAddress, amount);
+        const tx = await callContract(() => token.mint(toAddress, amount), token);
         return this.lockTransfer(async () => {
             const txReceipt = await tx.wait();
             return this.saveTransfer(ZeroAddress, toAddress, amount, txReceipt.blockNumber, txReceipt.hash);
@@ -79,7 +79,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         }
 
         await this._walletService.gasWallet(wallet);
-        const tx = await token.burn(amount);
+        const tx = await callContract(() => token.burn(amount), token);
         await this.lockTransfer(async () => {
             const txReceipt = await tx.wait();
             return this.saveTransfer(wallet.address, ZeroAddress, amount, txReceipt.blockNumber, txReceipt.hash);
@@ -102,12 +102,12 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         if (from.asAdmin) {
             const adminWallet = this._walletService.getAdminWallet();
             await this._walletService.gasWallet(adminWallet);
-            const txApprove = await token.approve(adminWallet.address, amount);
+            const txApprove = await callContract(() => token.approve(adminWallet.address, amount), token);
             await txApprove.wait();
             const adminToken = await this._contractService.tokenContract(adminWallet);
-            tx = await adminToken.transferFrom(wallet.address, toAddress, amount);
+            tx = await callContract(() => adminToken.transferFrom(wallet.address, toAddress, amount), adminToken);
         } else {
-            tx = await token.transfer(toAddress, amount);
+            tx = await callContract(() => token.transfer(toAddress, amount), token);
         }
         return this.lockTransfer(async () => {
             const txReceipt = await tx.wait();
@@ -220,7 +220,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
                 await touch();
                 await this._walletService.gasWallet(adminWallet);
                 await this._airdropRepository.update(pending.id, { status: OperationStatus.Processing });
-                const tx = await token.mintMany(pending.destinations.map(d => d.address), BigInt(pending.amount));
+                const tx = await callContract(() => token.mintMany(pending.destinations.map(d => d.address), BigInt(pending.amount)), token);
                 await this._airdropRepository.update(pending.id, { txHash: tx.hash });
                 await tx.wait();
                 await this._airdropRepository.update(pending.id, { status: OperationStatus.Complete });

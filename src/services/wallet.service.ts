@@ -62,7 +62,7 @@ export class WalletService implements IWalletService {
 		this._logger.verbose(`Sending gas to: ${wallet.address}`);
 		const amount = parseEther(this.config.get(WalletServiceSettingKeys.WALLET_GAS_AMOUNT));
 		const balance = await this._provider.getBalance(wallet.address);
-		if (balance > amount) {
+		if (balance > amount / 2n) {
 			this._logger.verbose(`Gassing not required for: ${wallet.address}`);
 			return;
 		}

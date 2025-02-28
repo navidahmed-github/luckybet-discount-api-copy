@@ -57,6 +57,7 @@ const run = async () => {
     showResponse(await maryJane.get(`/stakes/${stakeAddress}/status`));
 
     const destinations = Array.from({ length: 35 }, _ => ({ address: ethers.Wallet.createRandom().address }));
+    console.log(destinations);
     response = showResponse(await admin.post("/tokens/airdrop", { amount: 100, destinations }));
     const { requestId } = response.data;
     while (response.data.status != "Complete") {

@@ -5,8 +5,8 @@ import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
 import { Contract, EventLog, id, isAddress, JsonRpcApiProvider, Log, TransactionReceipt } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { fromTokenNative, IDestination, parseDestination, toNumberSafe } from "../../common.types";
-import { InsufficientBalanceError, MONGO_DUPLICATE_KEY, StakeAlreadyExistsError, StakeCannotCreateError, StakeError, StakeMissingAddressError, StakeNotFoundError } from "../../error.types";
+import { callContract, fromTokenNative, IDestination, parseDestination, toNumberSafe } from "../../common.types";
+import { InsufficientBalanceError, MONGO_DUPLICATE_KEY, StakeAlreadyExistsError, StakeCannotCreateError, StakeError, StakeMissingAddressError, StakeNotFoundError, StakeWithdrawError } from "../../error.types";
 import { IUserService } from "../user/user.types";
 import { DepositStake, RawStake, Stake, WithdrawStake } from "../../entities/stake.entity";
 import { DeployedContract } from "../../entities/contract.entity";
@@ -174,9 +174,9 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         }
 
         await this._walletService.gasWallet(wallet);
-        const txApprove = await token.approve(contractAddress, amount);
+        const txApprove = await callContract(() => token.approve(contractAddress, amount), token);
         await txApprove.wait();
-        const tx = await staking.stake(amount);
+        const tx = await callContract(() => staking.stake(amount), staking);
         return this.lockStake(async () => {
             const txReceipt: TransactionReceipt = await tx.wait();
             const unlockTime: bigint = (txReceipt.logs.find(l => l.topics[0] === DEPOSIT_TOPIC) as EventLog)?.args[2];
@@ -194,8 +194,14 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         const wallet = await this._userService.getUserWallet(userId);
         const staking = await this._contractService.stakeContract(contractAddress, wallet);
 
+        if (!(await staking.unlockedAmount(wallet.address))) {
+            throw new StakeWithdrawError((await staking.lockedAmount(wallet.address)) ?
+                "Unable to withdraw as lock period has not passed" :
+                "Unable to withdraw as nothing staked");
+        }
+
         await this._walletService.gasWallet(wallet);
-        const tx = await staking.withdraw();
+        const tx = await callContract(() => staking.withdraw(), staking);
         return this.lockStake(async () => {
             const txReceipt: TransactionReceipt = await tx.wait();
             const log = txReceipt.logs.find(l => l.topics[0] === WITHDRAW_TOPIC) as EventLog;

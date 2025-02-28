@@ -3,7 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { Contract, EventLog, id, TransactionReceipt, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { formatTokenId, getTokenId, IDestination, ISource, MimeType, parseDestination, splitTokenId, toAdminString } from "../../common.types";
+import { callContract, formatTokenId, getTokenId, IDestination, ISource, MimeType, parseDestination, splitTokenId, toAdminString } from "../../common.types";
 import { InsufficientBalanceError, NotApprovedError, OfferTokenIdError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { User } from "../../entities/user.entity";
@@ -97,17 +97,21 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
             if (toWallet) { // if user is specified then auto-approve
                 await this._walletService.gasWallet(toWallet);
                 const toToken = await this._contractService.tokenContract(toWallet);
-                const txApprove = await toToken.approve(adminWallet.address, amount);
+                const txApprove = await callContract(() => toToken.approve(adminWallet.address, amount), toToken);
                 await txApprove.wait();
             } else if (await adminToken.allowance(toAddress, adminWallet.address) < amount) {
                 throw new NotApprovedError(`Offer requires admin wallet: ${adminWallet.address} to be approved to transfer tokens`);
             }
             const partnerAddress = this._walletService.getLuckyBetWallet().address; // !! replace with partner wallet
-            const txToken = await adminToken.transferFrom(toAddress, partnerAddress, amount);
+            const txToken = await callContract(() => adminToken.transferFrom(toAddress, partnerAddress, amount), adminToken);
             const txTokenReceipt = await txToken.wait();
-            txOffer = await adminOffer["mint(address,uint128,(bytes32))"](toAddress, BigInt(offerType), [txTokenReceipt.hash.valueOf()]);
+            txOffer = await callContract(() => adminOffer["mint(address,uint128,(bytes32))"](
+                toAddress,
+                BigInt(offerType),
+                [txTokenReceipt.hash.valueOf()]
+            ), adminOffer);
         } else {
-            txOffer = await adminOffer.mint(toAddress, BigInt(offerType));
+            txOffer = await callContract(() => adminOffer.mint(toAddress, BigInt(offerType)), adminOffer);
         }
         return this.lockTransfer(async () => {
             const txOfferReceipt: TransactionReceipt = await txOffer.wait();
@@ -133,7 +137,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         }
 
         await this._walletService.gasWallet(wallet);
-        const tx = await offer.burn(tokenId);
+        const tx = await callContract(() => offer.burn(tokenId), offer);
         return this.lockTransfer(async () => {
             const txReceipt = await tx.wait();
             const rawTransfer = await this.saveTransfer(wallet.address, ZeroAddress, tokenId, txReceipt.blockNumber, txReceipt.hash);
@@ -157,12 +161,12 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         if (from.asAdmin) {
             const adminWallet = this._walletService.getAdminWallet();
             await this._walletService.gasWallet(adminWallet);
-            const txApprove = await offer.approve(adminWallet.address, tokenId);
+            const txApprove = await callContract(() => offer.approve(adminWallet.address, tokenId), offer);
             await txApprove.wait();
             const adminOffer = await this._contractService.offerContract(adminWallet);
-            tx = await adminOffer.transferFrom(wallet.address, toAddress, tokenId);
+            tx = await callContract(() => adminOffer.transferFrom(wallet.address, toAddress, tokenId), adminOffer);
         } else {
-            tx = await offer.transferFrom(wallet.address, toAddress, tokenId);
+            tx = await callContract(() => offer.transferFrom(wallet.address, toAddress, tokenId), offer);
         }
         return this.lockTransfer(async () => {
             const txReceipt = await tx.wait();
