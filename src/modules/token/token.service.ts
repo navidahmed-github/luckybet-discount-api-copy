@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { Contract, isAddress, ZeroAddress } from "ethers";
@@ -15,12 +16,18 @@ import { IProviderService } from "../../services/ethereumProvider.service";
 import { IJobService } from "../job/job.types";
 import { TokenHistoryDTO, ITokenService, AirdropStatusDTO } from "./token.types";
 
-const AIRDROP_MAX_MINT_PER_TX = 10;
+const AIRDROP_DEFAULT_CHUNK_SIZE = 100;
 const AIRDROP_JOB_NAME = "airdropTask";
+
+export enum TokenServiceSettingKeys {
+    AIRDROP_CHUNK_SIZE = "AIRDROP_CHUNK_SIZE",
+}
 
 @Injectable()
 export class TokenService extends TransferService<TokenHistoryDTO> implements ITokenService, OnApplicationBootstrap {
     constructor(
+        private readonly _config: ConfigService,
+
         @Inject(ProviderTokens.JobService)
         private readonly _jobService: IJobService,
 
@@ -137,9 +144,10 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
             .reduce(([v, i], curr) => curr.address ? [[...v, curr], i] : [v, [...i, curr]], [[], []]);
 
         const requestId = uuid_v4();
+        const chunkSize = Number(this._config.get(TokenServiceSettingKeys.AIRDROP_CHUNK_SIZE) ?? AIRDROP_DEFAULT_CHUNK_SIZE);
         try {
             while (valid.length) {
-                const chunkAddresses = valid.splice(0, AIRDROP_MAX_MINT_PER_TX);
+                const chunkAddresses = valid.splice(0, chunkSize);
                 this._airdropRepository.save({
                     requestId,
                     status: OperationStatus.Pending,

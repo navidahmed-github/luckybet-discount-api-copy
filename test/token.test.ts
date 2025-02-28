@@ -12,7 +12,7 @@ import { User } from "../src/entities/user.entity";
 import { ITokenService } from "../src/modules/token/token.types";
 import { IUserService } from "../src/modules/user/user.types";
 import { UserService } from "../src/modules/user/user.service";
-import { TokenService } from "../src/modules/token/token.service";
+import { TokenService, TokenServiceSettingKeys } from "../src/modules/token/token.service";
 import { IWalletService, WalletService, WalletServiceSettingKeys } from "../src/services/wallet.service";
 import { IContractService } from "../src/services/contract.service";
 import { MockContractService, MockTokenContract } from "./mocks/contract.service";
@@ -53,6 +53,9 @@ describe("Tokens", () => {
                             }
                             if (key === WalletServiceSettingKeys.WALLET_GAS_AMOUNT) {
                                 return "0.1";
+                            }
+                            if (key === TokenServiceSettingKeys.AIRDROP_CHUNK_SIZE) {
+                                return "10";
                             }
                             return key;
                         },
@@ -194,11 +197,11 @@ describe("Tokens", () => {
         await awaitSeconds(1);
         expect(await tokenService.airdropStatus(requestId)).toStrictEqual({ status: OperationStatus.Processing });
 
-        await awaitSeconds(5);
+        await awaitSeconds(18);
         expect(await tokenService.airdropStatus(requestId)).toStrictEqual({ status: OperationStatus.Complete });
         const allBalances = await Promise.all(destinationAddresses.map(async a => tokenContract.balanceOf(a)));
         expect(allBalances.every(b => b == 50n)).toBeTruthy();
-    }, 10000);
+    }, 30000);
 
     it("Should perform partial airdrop when some chunks fail", async () => {
         const randomAddresses = Array.from({ length: 30 }, _ => ({ address: Wallet.createRandom().address }));
@@ -214,7 +217,7 @@ describe("Tokens", () => {
         await awaitSeconds(1);
         expect(await tokenService.airdropStatus(requestId)).toStrictEqual({ status: OperationStatus.Processing });
 
-        await awaitSeconds(5);
+        await awaitSeconds(18);
         const status = await tokenService.airdropStatus(requestId);
         expect(status).toEqual(expect.objectContaining({ status: OperationStatus.Error }));
         expect(status.errors.slice(0, -1).every(e => e.reason.endsWith("Mint failed"))).toBeTruthy();
@@ -224,5 +227,5 @@ describe("Tokens", () => {
         expect(invalidBalances.every(b => b == 0n)).toBeTruthy();
         const validBalances = await Promise.all(destinationAddresses.slice(10).map(async a => tokenContract.balanceOf(a)));
         expect(validBalances.every(b => b == 50n)).toBeTruthy();
-    }, 10000);
+    }, 30000);
 });

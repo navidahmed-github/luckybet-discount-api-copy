@@ -57,6 +57,10 @@ export class MockTokenContract extends MockBaseContract {
         MockTokenContract.approvals = new Map<string, [string, bigint]>();
     }
 
+    async MINTER_ROLE(): Promise<string> {
+        return "MINTER";
+    }
+
     async queryFilter(): Promise<Log[]> {
         return [];
     }
@@ -67,6 +71,10 @@ export class MockTokenContract extends MockBaseContract {
 
     async off(): Promise<Contract> {
         return this as any;
+    }
+
+    async hasRole(_role: string, _account: string): Promise<boolean> {
+        return true;
     }
 
     async balanceOf(address: string): Promise<bigint> {
