@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsNotEmpty } from "class-validator";
-import { DestinationDTO, DestinationErrorDTO, IDestination, ISource, OperationStatus, TransferHistoryDTO } from "../../common.types";
+import { DestinationDTO, DestinationErrorDTO, IDestination, ISource, OperationStatus, TransferHistoryDTO, TransferSummaryDTO } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 
 export class CreateTokenCommand {
@@ -65,6 +65,14 @@ export class TokenBalanceDTO {
     balance: number;
 }
 
+export class TokenSummaryDTO extends TransferSummaryDTO {
+    @ApiProperty({
+        description: "Current total supply of tokens",
+        type: Number,
+    })
+    totalSupply: number;
+}
+
 export class TokenHistoryDTO extends TransferHistoryDTO {
     @ApiProperty({
         description: "Amount of tokens transferred",
@@ -106,6 +114,7 @@ export class TokenTransferDTO {
 }
 
 export interface ITokenService {
+    getSummary(): Promise<TokenSummaryDTO>;
     getBalance(dest: IDestination): Promise<bigint>;
     getHistory(dest: IDestination): Promise<TokenHistoryDTO[]>;
     create(to: IDestination, amount: bigint): Promise<RawTransfer>;

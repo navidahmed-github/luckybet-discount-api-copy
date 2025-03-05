@@ -58,6 +58,32 @@ export class DestinationErrorDTO extends DestinationDTO {
     reason: string;
 }
 
+export class TransferSummaryDTO {
+    @ApiProperty({
+        description: "Total count of all mints that have occurred",
+        type: Number,
+    })
+    totalMints: number;
+
+    @ApiProperty({
+        description: "Total count of all burns that have occurred",
+        type: Number,
+    })
+    totalBurns: number;
+
+    @ApiProperty({
+        description: "Total count of all transfers that have occurred",
+        type: Number,
+    })
+    totalTransfers: number;
+
+    @ApiProperty({
+        description: "Total unique wallets which have had transfers to/from them",
+        type: Number,
+    })
+    uniqueWallets: number;
+}
+
 export class TransferHistoryDTO {
     @ApiProperty({
         description: "Type of record",

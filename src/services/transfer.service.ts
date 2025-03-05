@@ -4,7 +4,7 @@ import { MongoRepository } from "typeorm";
 import { MongoBulkWriteError } from "mongodb";
 import { Contract, JsonRpcApiProvider, Log, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../providerTokens";
-import { IDestination, parseDestination, TransferHistoryDTO, TransferType } from "../common.types";
+import { IDestination, parseDestination, TransferHistoryDTO, TransferSummaryDTO, TransferType } from "../common.types";
 import { MONGO_DUPLICATE_KEY } from "../error.types";
 import { RawTransfer, Transfer } from "../entities/transfer.entity";
 import { User } from "../entities/user.entity";
@@ -50,7 +50,23 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
         this._event?.off("Transfer");
     }
 
-    public async getHistory(dest: IDestination, name: string, toDtoData: (t: Transfer) => Omit<T, "type" | "txHash" | "timestamp">): Promise<T[]> {
+    protected async getSummary(name: string): Promise<TransferSummaryDTO> {
+        const existsClause = {};
+        existsClause[name] = { $exists: true };
+        const total = await this._transferRepository.count(existsClause);
+        const totalMints = await this._transferRepository.count({ $and: [existsClause, { fromAddress: ZeroAddress }] });
+        const totalBurns = await this._transferRepository.count({ $and: [existsClause, { toAddress: ZeroAddress }] });
+        const { uniqueWallets } = await this._transferRepository.aggregate([
+            { $match: existsClause },
+            { $project: { addresses: ["$fromAddress", "$toAddress"] } },
+            { $unwind: "$addresses" },
+            { $group: { _id: "$addresses" } },
+            { $count: "uniqueWallets" }
+        ]).next() as any;
+        return { totalMints, totalBurns, totalTransfers: total - totalMints - totalBurns, uniqueWallets };
+    }
+
+    protected async getHistory(dest: IDestination, name: string, toDtoData: (t: Transfer) => Omit<T, "type" | "txHash" | "timestamp">): Promise<T[]> {
         const [address] = await parseDestination(this._userService, dest);
         this._logger.verbose(`Retrieving ${name} history for address: ${address}`);
         const lookupPipeline = (prefix: string) => {

@@ -5,7 +5,7 @@ import { MongoRepository } from "typeorm";
 import { Contract, isAddress, ZeroAddress } from "ethers";
 import { v4 as uuid_v4 } from 'uuid';
 import { ProviderTokens } from "../../providerTokens";
-import { awaitSeconds, callContract, fromTokenNative, IDestination, ISource, OperationStatus, parseDestination, toAdminString, toTokenNative } from "../../common.types";
+import { awaitSeconds, callContract, fromTokenNative, IDestination, ISource, OperationStatus, parseDestination, toAdminString, toNumberSafe, toTokenNative } from "../../common.types";
 import { AirdropCannotCreateError, AirdropNotFoundError, DestinationInvalidError, InsufficientBalanceError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { AirdropChunk } from "../../entities/airdrop.entity";
@@ -14,7 +14,7 @@ import { TransferService } from "../../services/transfer.service";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
 import { IJobService } from "../job/job.types";
-import { TokenHistoryDTO, ITokenService, AirdropStatusDTO } from "./token.types";
+import { TokenHistoryDTO, ITokenService, AirdropStatusDTO, TokenSummaryDTO } from "./token.types";
 
 const AIRDROP_DEFAULT_CHUNK_SIZE = 100;
 const AIRDROP_JOB_NAME = "airdropTask";
@@ -48,6 +48,13 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
 
     public async onApplicationBootstrap() {
         await this._jobService.define(AIRDROP_JOB_NAME, this.airdropProcessor);
+    }
+
+    public async getSummary(): Promise<TokenSummaryDTO> {
+        const token = await this._contractService.tokenContract();
+        const totalSupply = toNumberSafe(await token.totalSupply());
+        const transferSummary = await super.getSummary("token");
+        return { ...transferSummary, totalSupply };
     }
 
     public async getBalance(dest: IDestination): Promise<bigint> {

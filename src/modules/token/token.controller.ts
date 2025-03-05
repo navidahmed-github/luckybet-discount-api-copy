@@ -5,7 +5,7 @@ import { ApiQueryAddress, ApiQueryUserId, fromTokenNative, toTokenNative } from 
 import { UserMissingIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
-import { TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, AirdropCommand, AirdropResponseDTO, AirdropStatusDTO, CreateTokenCommand } from "./token.types";
+import { TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, AirdropCommand, AirdropResponseDTO, AirdropStatusDTO, CreateTokenCommand, TokenSummaryDTO } from "./token.types";
 
 @Controller("tokens")
 @ApiBearerAuth()
@@ -14,6 +14,17 @@ export class TokenController {
         @Inject(ProviderTokens.TokenService)
         private _tokenService: ITokenService,
     ) { }
+
+    @Get("summary")
+    @Roles(Role.Admin, Role.User)
+    @ApiOperation({ summary: "Get token summary details" })
+    @ApiOkResponse({
+        description: "Summary was returned successfully",
+        type: TokenSummaryDTO
+    })
+    async summary(): Promise<TokenSummaryDTO> {
+        return this._tokenService.getSummary();
+    }
 
     @Get("owned")
     @Roles(Role.Admin, Role.User)
