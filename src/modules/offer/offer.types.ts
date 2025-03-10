@@ -69,6 +69,12 @@ export class OfferHistoryDTO extends TransferHistoryDTO {
     })
     tokenId: string;
 
+    @ApiProperty({
+        description: "Name of offer type",
+        type: String,
+    })
+    offerName?: string;
+
     @ApiPropertyOptional({
         description: "Additional information related to transaction",
         type: String,

@@ -73,7 +73,7 @@ describe("Users", () => {
         const users = await userService.getAll();
         expect(users.length).toBe(3);
         expect(users[0].userId).toBe("test-user1");
-        expect(users[0].address).toBe("0x116B002A2593b9DD5a424ED81004A8F21BD6eEcd");
+        expect(users[0].address).toBe("0xfD295e9faA90F5a88b578c23FB97833db0DC7fcD");
         expect(users[1].userId).toBe("test-user2");
         expect(users[2].userId).toBe("test-user3");
 
@@ -81,7 +81,7 @@ describe("Users", () => {
         await expect(userService.getByUserId("test-user4")).rejects.toThrow(UserNotFoundError);
 
         const wallet = await userService.getUserWallet("test-user1");
-        expect(wallet.address).toBe("0x116B002A2593b9DD5a424ED81004A8F21BD6eEcd");
+        expect(wallet.address).toBe("0xfD295e9faA90F5a88b578c23FB97833db0DC7fcD");
     });
 
     it("Should not be able to create duplicate users", async () => {

@@ -21,7 +21,7 @@ export class AtomicSequenceService implements IAtomicSequenceService {
 
 		this.runner = (this.dataSource.driver as MongoDriver)?.queryRunner;
 		if (!this.runner) throw new Error("AtomicSequenceService failed to create query runner");
-		if (!(await this.runner.count(SEQUENCE_TABLE_NAME, { name }))) await this.runner.insertOne(SEQUENCE_TABLE_NAME, { name, seq: 0 });
+		if (!(await this.runner.count(SEQUENCE_TABLE_NAME, { name }))) await this.runner.insertOne(SEQUENCE_TABLE_NAME, { name, seq: 1 });
 	}
 
 	async getNextSequence(name: string): Promise<number> {

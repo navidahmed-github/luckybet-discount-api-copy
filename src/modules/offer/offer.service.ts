@@ -73,10 +73,11 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
     }
 
     public async getHistory(dest: IDestination): Promise<OfferHistoryDTO[]> {
-        return super.getHistory(dest, "offer", t => {
+        return super.getHistory(dest, "offer", async t => {
+            const [template] = await this.getWithFallback(this._templateRepository, t.offer.offerType, t.offer.offerInstance);
             const tokenId = formatTokenId(getTokenId(t.offer.offerType, t.offer.offerInstance));
             const additionalInfo = t.offer.additionalInfo ? { additionalInfo: t.offer.additionalInfo } : {};
-            return { tokenId, ...additionalInfo };
+            return { tokenId, ...additionalInfo, ...(template?.metadata?.name && { offerName: template.metadata.name }) };
         });
     }
 

@@ -72,6 +72,6 @@ export class UserController {
 	}
 	
 	private toDTO(user: User): UserDTO {
-		return { id: user.userId, address: user.address };
+		return { id: user.userId, address: user.address, ordinal: user.ordinal };
 	}
 }

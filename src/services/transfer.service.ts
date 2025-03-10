@@ -66,7 +66,7 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
         return { totalMints, totalBurns, totalTransfers: total - totalMints - totalBurns, uniqueWallets };
     }
 
-    protected async getHistory(dest: IDestination, name: string, toDtoData: (t: Transfer) => Omit<T, "type" | "txHash" | "timestamp">): Promise<T[]> {
+    protected async getHistory(dest: IDestination, name: string, toDtoData: (t: Transfer) => Promise<Omit<T, "type" | "txHash" | "timestamp">>): Promise<T[]> {
         const [address] = await parseDestination(this._userService, dest);
         this._logger.verbose(`Retrieving ${name} history for address: ${address}`);
         const lookupPipeline = (prefix: string) => {
@@ -94,9 +94,9 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
             lookupPipeline("to"),
             { $sort: { blockTimestamp: 1 } }
         ]);
-        return (await transfers.toArray()).map(toHistory).filter(Boolean);
+        return (await Promise.all((await transfers.toArray()).map(toHistory))).filter(Boolean);
 
-        function toHistory(transfer: Transfer & { fromUser: User[], toUser: User[] }): T | null {
+        async function toHistory(transfer: Transfer & { fromUser: User[], toUser: User[] }): Promise<T | null> {
             try {
                 let dto = null;
                 if (transfer.toAddress == address) {
@@ -112,7 +112,7 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
                         { type: TransferType.Send, otherAddress: transfer.toAddress, ...otherUser };
                 }
                 if (!dto) throw new Error("Invalid type");
-                const data = toDtoData(transfer);
+                const data = await toDtoData(transfer);
                 return { ...dto, ...data, txHash: transfer.txHash, timestamp: transfer.blockTimestamp };
             } catch (err) {
                 this._logger.error(`Failed to parse history record with txHash: ${transfer.txHash}, reason: ${err.message}`);

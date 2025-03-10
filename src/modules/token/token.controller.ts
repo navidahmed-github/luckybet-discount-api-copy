@@ -5,7 +5,7 @@ import { ApiQueryAddress, ApiQueryUserId, fromTokenNative, toTokenNative } from 
 import { UserMissingIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
-import { TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, AirdropCommand, AirdropResponseDTO, AirdropStatusDTO, CreateTokenCommand, TokenSummaryDTO } from "./token.types";
+import { TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, AirdropCommand, AirdropResponseDTO, AirdropStatusDTO, CreateTokenCommand, TokenSummaryDTO, AirdropDTO } from "./token.types";
 
 @Controller("tokens")
 @ApiBearerAuth()
@@ -105,6 +105,14 @@ export class TokenController {
         }
         const rawTransfer = await this._tokenService.transfer({ userId, asAdmin }, cmd.to, toTokenNative(cmd.amount));
         return { ...rawTransfer, amount: fromTokenNative(BigInt(rawTransfer.token.amount)) };
+    }
+
+    @Get("airdrop")
+    @Roles(Role.Admin)
+    @ApiOperation({ summary: "Get all airdrops" })
+    @ApiOkResponse({ description: "Airdrops were returned successfully" })
+    async allAirdrops(): Promise<AirdropDTO[]> {
+        return this._tokenService.airdropGetAll();
     }
 
     @Post("airdrop")

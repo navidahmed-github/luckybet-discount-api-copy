@@ -42,17 +42,58 @@ export class AirdropCommand {
     destinations: DestinationDTO[];
 }
 
+export class AirdropDTO {
+    @ApiProperty({
+        description: "Identifier which can be used to query status",
+        type: String,
+    })
+    requestId: string;
+
+    @ApiProperty({
+        description: "Amount of discount token airdropped to each destination",
+        type: Number,
+    })
+    amount: number;
+
+    @ApiProperty({
+        description: "Total number of destinations airdropped",
+        type: Number,
+    })
+    destinationCount: number;
+
+    @ApiProperty({
+        description: "Current status of airdrop",
+        enum: OperationStatus,
+    })
+    status: OperationStatus;
+
+    @ApiProperty({
+        description: "Timestamp when airdrop initiated",
+        type: Number,
+    })
+    timestamp: number;
+}
+
 export class AirdropResponseDTO {
     @ApiProperty({
         description: "Identifier which can be used to query status",
-        type: Number,
+        type: String,
     })
     requestId: string;
 }
 
 export class AirdropStatusDTO {
+    @ApiProperty({
+        description: "Current status of airdrop",
+        enum: OperationStatus,
+    })
     status: OperationStatus;
 
+    @ApiProperty({
+        description: "Errors that occurred during airdrop",
+        type: () => DestinationErrorDTO,
+        isArray: true
+    })
     errors?: DestinationErrorDTO[];
 }
 
@@ -120,6 +161,7 @@ export interface ITokenService {
     create(to: IDestination, amount: bigint): Promise<RawTransfer>;
     destroy(amount: bigint): Promise<void>;
     transfer(from: ISource, to: IDestination, amount: bigint): Promise<RawTransfer>;
+    airdropGetAll(): Promise<AirdropDTO[]>;
     airdrop(destinations: IDestination[], amount: bigint): Promise<string>;
     airdropStatus(requestId: string): Promise<AirdropStatusDTO>;
 }

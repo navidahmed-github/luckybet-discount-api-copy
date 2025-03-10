@@ -14,8 +14,9 @@ import { TransferService } from "../../services/transfer.service";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
 import { IJobService } from "../job/job.types";
-import { TokenHistoryDTO, ITokenService, AirdropStatusDTO, TokenSummaryDTO } from "./token.types";
+import { AirdropDTO, AirdropStatusDTO, ITokenService, TokenHistoryDTO, TokenSummaryDTO } from "./token.types";
 
+const LUCKYBET_WALLET_ID = "luckybet-internal";
 const AIRDROP_DEFAULT_CHUNK_SIZE = 100;
 const AIRDROP_JOB_NAME = "airdropTask";
 
@@ -58,14 +59,16 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
     }
 
     public async getBalance(dest: IDestination): Promise<bigint> {
-        const [address] = await parseDestination(this._userService, dest);
+        const address = (dest.userId === LUCKYBET_WALLET_ID) ?
+            this._walletService.getLuckyBetWallet().address :
+            (await parseDestination(this._userService, dest))[0];
         this._logger.verbose(`Retrieving balance for address: ${address}`);
         const token = await this._contractService.tokenContract();
         return await token.balanceOf(address);
     }
 
     public async getHistory(dest: IDestination): Promise<TokenHistoryDTO[]> {
-        return super.getHistory(dest, "token", t => ({ amount: fromTokenNative(BigInt(t.token.amount)) }))
+        return super.getHistory(dest, "token", async t => ({ amount: fromTokenNative(BigInt(t.token.amount)) }))
     }
 
     public async create(to: IDestination, amount: bigint): Promise<RawTransfer> {
@@ -126,6 +129,28 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         return this.lockTransfer(async () => {
             const txReceipt = await tx.wait();
             return this.saveTransfer(wallet.address, toAddress, amount, txReceipt.blockNumber, txReceipt.hash);
+        });
+    }
+
+    public async airdropGetAll(): Promise<AirdropDTO[]> {
+        const requests = await this._airdropRepository.aggregate([
+            {
+                $group: {
+                    _id: "$requestId",
+                    amount: { $first: "$amount" },
+                    destinationLists: { $addToSet: "$destinations" },
+                    statuses: { $addToSet: "$status" },
+                    timestamp: { $min: "$createdAt" }
+                }
+            }
+        ]).toArray() as any;
+        return requests.map(r => {
+            let status = OperationStatus.Processing;
+            if (r.statuses.every(s => [OperationStatus.Error, OperationStatus.Complete].includes(s))) {
+                status = r.statuses.includes(OperationStatus.Error) ? OperationStatus.Error : OperationStatus.Complete;
+            }
+            const destinationCount = r.destinationLists.reduce((acc, curr) => acc + curr.length, 0);
+            return { requestId: r._id, amount: r.amount, destinationCount, status, timestamp: new Date(r.timestamp).valueOf() }
         });
     }
 

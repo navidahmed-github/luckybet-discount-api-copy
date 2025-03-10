@@ -15,6 +15,12 @@ export class UserDTO {
 		type: String,
 	})
 	address: string;
+
+	@ApiProperty({
+		description: "Ordinal used to derive wallet address",
+		type: Number,
+	})
+	ordinal: number;
 }
 
 export class CreateUserCommand {

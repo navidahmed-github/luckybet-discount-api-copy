@@ -36,6 +36,9 @@ const run = async () => {
     const johnSmith = httpJwt(authTokens.jwtJohnSmith);
     const maryJane = httpJwt(authTokens.jwtMaryJane);
 
+    showResponse(await admin.get("/tokens/summary"));
+return; // !!
+
     showResponse(await admin.post("/users", { id: "john.smith" }));
     showResponse(await admin.post("/users", { id: "mary.jane" }));
     showResponse(await admin.get('/users'));
