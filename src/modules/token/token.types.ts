@@ -112,6 +112,18 @@ export class TokenSummaryDTO extends TransferSummaryDTO {
         type: Number,
     })
     totalSupply: number;
+
+    @ApiProperty({
+        description: "Total of all amounts associated with mints",
+        type: Number,
+    })
+    totalMinted: number;
+
+    @ApiProperty({
+        description: "Total of all amounts associated with burns",
+        type: Number,
+    })
+    totalBurnt: number;
 }
 
 export class TokenHistoryDTO extends TransferHistoryDTO {

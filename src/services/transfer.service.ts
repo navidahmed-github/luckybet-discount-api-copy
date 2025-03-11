@@ -148,7 +148,7 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
     ): Promise<RawTransfer> {
         const transfer = this.addTransferData({ fromAddress, toAddress, blockNumber, txHash }, value, args);
         try {
-            if (!await this._transferRepository.findOne({ where: { txHash } })) {
+            if (!await this._transferRepository.findOne({ where: { txHash, toAddress } })) {
                 const blockTimestamp = (await this._provider.getBlock(blockNumber)).timestamp;
                 return await this._transferRepository.save({ ...transfer, blockTimestamp });
             }

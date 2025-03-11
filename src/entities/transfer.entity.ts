@@ -19,6 +19,8 @@ export class OfferTransfer {
 }
 
 @Entity("transfers")
+ // multiple mints via mintMany() can occur in the same transaction for a token so txHash is not necessarily unique
+@Index(["txHash", "toAddress"], { unique: true })
 export class Transfer {
 	@ObjectIdColumn()
 	id: ObjectId;
@@ -39,7 +41,6 @@ export class Transfer {
 	blockTimestamp: number;
 
 	@Column()
-	@Index({ unique: true })
 	txHash: string;
 
 	@Column(() => TokenTransfer)

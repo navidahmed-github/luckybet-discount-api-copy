@@ -55,7 +55,9 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         const token = await this._contractService.tokenContract();
         const totalSupply = toNumberSafe(await token.totalSupply());
         const transferSummary = await super.getSummary("token");
-        return { ...transferSummary, totalSupply };
+        const totalMinted = await this.getAmountTotals({ fromAddress: ZeroAddress });
+        const totalBurnt = await this.getAmountTotals({ toAddress: ZeroAddress });
+        return { ...transferSummary, totalSupply, totalMinted, totalBurnt };
     }
 
     public async getBalance(dest: IDestination): Promise<bigint> {
@@ -191,7 +193,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
                 this._airdropRepository.save({
                     requestId,
                     status: OperationStatus.Error,
-                    error: "Users not found",
+                    error: "User not found",
                     amount: amount.toString(),
                     destinations: invalid
                 });
@@ -281,5 +283,12 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
 
     protected addTransferData(transfer: Omit<RawTransfer, "token" | "offer">, value: bigint, _args: any[]): RawTransfer {
         return { ...transfer, token: { amount: value.toString() } };
+    }
+
+    private async getAmountTotals(addressClause: any) {
+        return fromTokenNative((await this._transferRepository.aggregate([
+            { $match: { $and: [{ token: { $exists: true } }, addressClause] } },
+            { $project: { "token.amount": 1 } },
+        ]).toArray()).map(t => BigInt(t.token.amount)).reduce((acc, curr) => acc + curr, 0n));
     }
 }

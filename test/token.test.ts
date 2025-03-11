@@ -221,7 +221,7 @@ describe("Tokens", () => {
         const status = await tokenService.airdropStatus(requestId);
         expect(status).toEqual(expect.objectContaining({ status: OperationStatus.Error }));
         expect(status.errors.slice(0, -1).every(e => e.reason.endsWith("Mint failed"))).toBeTruthy();
-        expect(status.errors.slice(-1).every(e => e.reason.endsWith("Users not found"))).toBeTruthy();
+        expect(status.errors.slice(-1).every(e => e.reason.endsWith("User not found"))).toBeTruthy();
         expect(status.errors.map(e => e.address).filter(Boolean)).toEqual(destinationAddresses.slice(0, 10));
         const invalidBalances = await Promise.all(destinationAddresses.slice(0, 10).map(async a => tokenContract.balanceOf(a)));
         expect(invalidBalances.every(b => b == 0n)).toBeTruthy();
