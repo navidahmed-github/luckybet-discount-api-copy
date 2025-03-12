@@ -62,6 +62,20 @@ export class CreateTemplateCommand {
     attributes: object;
 }
 
+export class OfferDTO {
+    @ApiProperty({
+        description: "Token identifier of offer",
+        type: String,
+    })
+    tokenId: string;
+
+    @ApiProperty({
+        description: "Name of offer type",
+        type: String,
+    })
+    offerName?: string;
+}
+
 export class OfferHistoryDTO extends TransferHistoryDTO {
     @ApiProperty({
         description: "Token identifier of offer transferred",
@@ -122,7 +136,7 @@ export type MetadataDetails = {
 export interface IOfferService {
     getMetadata(offerType: number, offerInstance: number, detailed?: boolean): Promise<Metadata>;
     getImage(offerType: number, offerInstance: number): Promise<OfferImage>;
-    getOffers(dest: IDestination): Promise<bigint[]>;
+    getOffers(dest: IDestination, shortId?: boolean): Promise<OfferDTO[]>;
     getHistory(dest: IDestination): Promise<OfferHistoryDTO[]>;
     create(to: IDestination, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransfer>;
     activate(userId: string, tokenId: bigint): Promise<RawTransfer>;

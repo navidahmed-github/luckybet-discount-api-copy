@@ -127,7 +127,7 @@ describe("Offers", () => {
         const rawTransfer = await offerService.create({ address: users[0].address }, 3, 0n);
 
         const offers = await offerService.getOffers({ userId: users[0].userId });
-        expect(offers.map(formatTokenId)).toEqual([
+        expect(offers.map(o => o.tokenId)).toEqual([
             "0x0000000000000000000000000000000100000000000000000000000000000001",
             "0x0000000000000000000000000000000100000000000000000000000000000002",
             "0x0000000000000000000000000000000300000000000000000000000000000002"]);
@@ -220,7 +220,7 @@ describe("Offers", () => {
 
         let rawTransfer = await offerService.transfer({ userId: users[0].userId }, { address: users[1].address }, tokenId);
         expect((await offerService.getOffers({ userId: users[0].userId })).length).toEqual(0);
-        expect(formatTokenId((await offerService.getOffers({ userId: users[1].userId }))[0]))
+        expect((await offerService.getOffers({ userId: users[1].userId }))[0].tokenId)
             .toEqual("0x0000000000000000000000000000000300000000000000000000000000000001");
         let expected: any = {
             fromAddress: users[0].address,
@@ -233,7 +233,7 @@ describe("Offers", () => {
 
         rawTransfer = await offerService.transfer({ userId: users[1].userId, asAdmin: true }, { userId: users[2].userId }, tokenId);
         expect((await offerService.getOffers({ userId: users[1].userId })).length).toEqual(0);
-        expect(formatTokenId((await offerService.getOffers({ userId: users[2].userId }))[0]))
+        expect((await offerService.getOffers({ userId: users[2].userId }))[0].tokenId)
             .toEqual("0x0000000000000000000000000000000300000000000000000000000000000001");
         expected = {
             fromAddress: users[1].address,

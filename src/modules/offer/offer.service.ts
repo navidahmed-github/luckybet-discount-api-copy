@@ -11,7 +11,7 @@ import { Metadata, Template } from "../../entities/template.entity";
 import { OfferImage } from "../../entities/image.entity";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
-import { IOfferService, MetadataDetails, OfferHistoryDTO } from "./offer.types";
+import { IOfferService, MetadataDetails, OfferDTO, OfferHistoryDTO } from "./offer.types";
 import { TransferService } from "../../services/transfer.service";
 
 export const TRANSFER_TOPIC = id("Transfer(address,address,uint256)");
@@ -59,7 +59,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         return (await this.getWithFallback(this._imageRepository, offerType, offerInstance))[0];
     }
 
-    public async getOffers(dest: IDestination): Promise<bigint[]> {
+    public async getOffers(dest: IDestination, shortId?: boolean): Promise<OfferDTO[]> {
         const [address] = await parseDestination(this._userService, dest);
         this._logger.verbose(`Retrieving offers for address: ${address}`);
         const offer = await this._contractService.offerContract();
@@ -67,8 +67,12 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         const offers = [];
 
         for (let i = 0; i < balance; i++) {
-            offers.push(await offer.tokenOfOwnerByIndex(address, i));
+            const tokenId = await offer.tokenOfOwnerByIndex(address, i);
+            const { offerType, offerInstance } = splitTokenId(tokenId);
+            const [template] = await this.getWithFallback(this._templateRepository, offerType, offerInstance);
+            offers.push({ tokenId: formatTokenId(tokenId, shortId), ...(template?.metadata?.name && { offerName: template.metadata.name }) });
         }
+        offers.sort((a, b) => a.tokenId.localeCompare(b.tokenId, "en-AU", { numeric: true }))
         return offers;
     }
 

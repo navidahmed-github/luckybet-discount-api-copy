@@ -9,7 +9,7 @@ import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { Metadata, Template } from "../../entities/template.entity";
-import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails } from "./offer.types";
+import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails, OfferDTO } from "./offer.types";
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
@@ -48,10 +48,19 @@ export class OfferController {
     @ApiOperation({ summary: "Get offers owned for user" })
     @ApiQueryUserId("Identifier of user for which to return offers (admin role only)")
     @ApiQueryAddress("Address for which to return offers (admin role only)")
-    @ApiOkResponse({ description: "The offers were returned successfully" })
-    async owned(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<string[]> {
+    @ApiOkResponse({
+        description: "Offers were returned successfully",
+        type: OfferDTO,
+        isArray: true
+    })
+    async owned(
+        @Request() req,
+        @Query("userId") userId?: string,
+        @Query("address") address?: string,
+        @Query("shortId", new ParseBoolPipe({ optional: true })) shortId?: boolean
+    ): Promise<OfferDTO[]> {
         const dest = req.user.role === Role.Admin ? { userId, address } : { userId: req.user.id };
-        return this._offerService.getOffers(dest).then(o => o.map(formatTokenId));
+        return this._offerService.getOffers(dest, shortId);
     }
 
     @Get("history")
@@ -59,7 +68,10 @@ export class OfferController {
     @ApiOperation({ summary: "Get history for user" })
     @ApiQueryUserId("Identifier of user for which to return history (admin role only)")
     @ApiQueryAddress("Address for which to return history (admin role only)")
-    @ApiOkResponse({ description: "The history was returned successfully" })
+    @ApiOkResponse({
+        description: "History was returned successfully",
+        type: OfferHistoryDTO,
+    })
     async history(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<OfferHistoryDTO[]> {
         const dest = req.user.role === Role.Admin ? { userId, address } : { userId: req.user.id };
         return this._offerService.getHistory(dest);

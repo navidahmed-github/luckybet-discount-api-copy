@@ -158,8 +158,8 @@ export function toAdminString(from: ISource) {
     return from.asAdmin ? `as admin: ${from.asAdmin}` : "";
 }
 
-export function formatTokenId(tokenId: bigint) {
-    return `0x${tokenId.toString(16).padStart(64, '0')}`
+export function formatTokenId(tokenId: bigint, shortId?: boolean) {
+    return shortId ? `0x${tokenId.toString(16)}` : `0x${tokenId.toString(16).padStart(64, '0')}`;
 }
 
 export function getTokenId(offerType: number, offerInstance: number): bigint {
