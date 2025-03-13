@@ -182,7 +182,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
 
     public async getTemplates(): Promise<Template[]> {
         this._logger.verbose("Get templates");
-        return this._templateRepository.find();
+        return this._templateRepository.find({ order: { offerType: "ASC", offerInstance: "ASC" } });
     }
 
     public async createTemplate(offerType: number, metadata: Metadata, offerInstance?: number): Promise<void> {
