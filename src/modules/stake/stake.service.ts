@@ -106,10 +106,13 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         if (await staking.underlyingToken() != this._tokenAddress) {
             throw new StakeCannotCreateError("Staking contract underlying token mismatch")
         }
-        const token = await this._contractService.tokenContract();
+
+        const adminWallet = this._walletService.getAdminWallet();
+        const token = await this._contractService.tokenContract(adminWallet);
         const MINTER_ROLE = await token.MINTER_ROLE();
         if (!await token.hasRole(MINTER_ROLE, address)) {
-            throw new StakeCannotCreateError("Staking contract does not have mint permission")
+            await this._walletService.gasWallet(adminWallet);
+            await token.grantRole(MINTER_ROLE, address);
         }
 
         try {
