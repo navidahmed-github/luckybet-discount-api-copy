@@ -1,9 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsNotEmpty } from "class-validator";
+import { IsNotEmpty, ValidateNested } from "class-validator";
+import { Type } from "class-transformer";
 import { DestinationDTO, DestinationErrorDTO, IDestination, ISource, OperationStatus, TransferHistoryDTO, TransferSummaryDTO } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 
 export class CreateTokenCommand {
+    @IsNotEmpty()
+    @ValidateNested()
+    @Type(() => DestinationDTO)
     @ApiProperty({
         description: "Destination to transfer discount token to",
         type: () => DestinationDTO,
@@ -34,6 +38,9 @@ export class AirdropCommand {
     })
     amount: number;
 
+    @IsNotEmpty()
+    @ValidateNested({ each: true })
+    @Type(() => DestinationDTO)
     @ApiProperty({
         description: "Destinations to airdrop tokens to",
         type: () => DestinationDTO,
@@ -96,7 +103,6 @@ export class AirdropStatusDTO {
     })
     errors?: DestinationErrorDTO[];
 }
-
 
 export class TokenBalanceDTO {
     @ApiProperty({

@@ -261,12 +261,12 @@ describe("Offers", () => {
         const offer = {
             name: "10% Discount",
             description: "10% of your next bet on the horses",
-            attributes: [{ "trait_type": "discount_percent", value: 10 }, { "trait_type": "valid", value: "horses" }]
+            attributes: [{ name: "discount_percent", value: 10, type: "number" }, { name: "valid", value: "horses" }]
         };
         const enhancedOffer = {
             name: "10% Discount (Enhanced)",
             description: "10% of your next bet on any event",
-            attributes: [{ "trait_type": "discount_percent", value: 10 }, { "trait_type": "valid", value: "all" }]
+            attributes: [{ name: "discount_percent", value: 10 }, { name: "valid", value: "all" }]
         }
         await offerService.createTemplate(3, offer);
         await offerService.createTemplate(3, enhancedOffer, 4);

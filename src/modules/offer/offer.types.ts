@@ -1,11 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsNotEmpty } from "class-validator";
+import { IsArray, IsNotEmpty, ValidateNested } from "class-validator";
+import { Type } from "class-transformer";
 import { DestinationDTO, IDestination, ISource, MimeType, TransferHistoryDTO } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { Metadata, Template } from "../../entities/template.entity";
 import { OfferImage } from "../../entities/image.entity";
 
 export class CreateOfferCommand {
+    @IsNotEmpty()
+    @ValidateNested()
+    @Type(() => DestinationDTO)
     @ApiProperty({
         description: "Where to transfer NFT to",
         type: () => DestinationDTO,
@@ -33,6 +37,9 @@ export class TransferOfferCommand {
     })
     fromUserId?: string;
 
+    @IsNotEmpty()
+    @ValidateNested()
+    @Type(() => DestinationDTO)
     @ApiProperty({
         description: "Where to transfer offer to",
         type: () => DestinationDTO,
@@ -55,11 +62,15 @@ export class CreateTemplateCommand {
     })
     description: string;
 
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => AttributeDTO)
     @ApiProperty({
         description: "Attributes for offer type",
-        type: Object,
+        type: () => AttributeDTO,
+        isArray: true
     })
-    attributes: object;
+    attributes: AttributeDTO[];
 }
 
 export class OfferDTO {
@@ -96,6 +107,28 @@ export class OfferHistoryDTO extends TransferHistoryDTO {
     additionalInfo?: string;
 }
 
+export class AttributeDTO {
+    @IsNotEmpty()
+    @ApiProperty({
+        description: "Name of attribute",
+        type: String,
+    })
+    name: string;
+
+    @IsNotEmpty()
+    @ApiProperty({
+        description: "Value of attribute",
+        type: Object,
+    })
+    value: string | number;
+
+    @ApiProperty({
+        description: "Type of attribute",
+        type: Object,
+    })
+    type?: string;
+}
+
 export class TemplateDTO {
     @ApiProperty({
         description: "Type of offer",
@@ -123,9 +156,18 @@ export class TemplateDTO {
 
     @ApiProperty({
         description: "Attributes for offer type",
-        type: Object,
+        type: () => AttributeDTO,
+        isArray: true
     })
-    attributes: object;
+    attributes: AttributeDTO[];
+}
+
+export class ImageDTO {
+    @ApiProperty({
+        description: "Data URL encoded image",
+        type: String,
+    })
+    dataUrl?: string;
 }
 
 export type MetadataDetails = {

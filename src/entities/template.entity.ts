@@ -1,6 +1,18 @@
 import { Column, CreateDateColumn, Entity, Index, ObjectId, ObjectIdColumn, UpdateDateColumn } from "typeorm";
 
 Entity()
+export class Attribute {
+	@Column()
+	name: string;
+
+	@Column()
+	value: string | number;
+
+	@Column()
+	type?: string
+}
+
+Entity()
 export class Metadata {
 	@Column()
 	name: string;
@@ -8,8 +20,8 @@ export class Metadata {
 	@Column()
 	description: string;
 
-	@Column()
-	attributes: object;
+	@Column(() => Attribute, { array: true })
+	attributes: Attribute[];
 }
 
 @Entity("templates")

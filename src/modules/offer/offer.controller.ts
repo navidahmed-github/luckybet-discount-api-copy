@@ -3,13 +3,13 @@ import { ApiBearerAuth, ApiForbiddenResponse, ApiNoContentResponse, ApiOkRespons
 import { FileInterceptor } from "@nestjs/platform-express";
 import { createReadStream } from "fs";
 import { ProviderTokens } from "../../providerTokens";
-import { ApiQueryAddress, ApiQueryUserId, formatTokenId, MimeType, toTokenNative } from "../../common.types";
+import { ApiQueryAddress, ApiQueryUserId, MimeType, toTokenNative } from "../../common.types";
 import { OfferNotFoundError, OfferTokenIdError, UserMissingIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { Metadata, Template } from "../../entities/template.entity";
-import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails, OfferDTO } from "./offer.types";
+import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails, OfferDTO, ImageDTO } from "./offer.types";
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
@@ -199,6 +199,24 @@ export class OfferController {
     ): Promise<void> {
         await this.checkPartnerPermission(offerType, req);
         await this._offerService.deleteImage(offerType, offerInstance);
+    }
+
+    @Get("imageTemplate/:offerType/:offerInstance?") // !! clean-up
+    @ApiOperation({ summary: "Get image for an offer type/instance" })
+    @ApiParamOfferType()
+    @ApiParamOfferInstance()
+    @ApiOkResponse({
+        description: "The image was returned successfully",
+        type: ImageDTO
+    })
+    async imgTemplate(
+        @Param("offerType", new ParseIntPipe()) offerType: number,
+        @Param("offerInstance", new ParseIntPipe({ optional: true })) offerInstance?: number
+    ): Promise<ImageDTO> {
+        // This is less efficient than the streamable file used for the standard image retrieval but is simpler
+        // and only used on the portal anyway 
+        const image = await this._offerService.getImage(offerType, offerInstance);
+        return image ? { dataUrl: `data:${image.format};base64,${image.data.toString('base64')}` } : {};
     }
 
     // DO NOT reorder this method, it should always be last so the more specific overrides above take precedence

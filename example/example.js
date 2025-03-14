@@ -36,9 +36,6 @@ const run = async () => {
     const johnSmith = httpJwt(authTokens.jwtJohnSmith);
     const maryJane = httpJwt(authTokens.jwtMaryJane);
 
-    showResponse(await admin.get("/tokens/summary"));
-return; // !!
-
     showResponse(await admin.post("/users", { id: "john.smith" }));
     showResponse(await admin.post("/users", { id: "mary.jane" }));
     showResponse(await admin.get('/users'));
@@ -71,17 +68,17 @@ return; // !!
     await admin.put("/offers/template/1/", {
         name: "Discount Bet",
         description: "10% of next bet on horses",
-        attributes: [{ "trait_type": "discount_percent", value: 10 }, { "trait_type": "valid", value: "horses" }]
+        attributes: [{ name: "discount_percent", value: 10 }, { name: "valid", value: "horses" }]
     });
     await admin.put("/offers/template/1/3", {
         name: "Discount Bet",
         description: "5% of next bet on horses",
-        attributes: [{ "trait_type": "discount_percent", value: 5 }, { "trait_type": "valid", value: "horses" }]
+        attributes: [{ name: "discount_percent", value: 5 }, { name: "valid", value: "horses" }]
     });
     await admin.put("/offers/template/1/", {
         name: "Discount Bet",
         description: "10% of next bet on any sport",
-        attributes: [{ "trait_type": "discount_percent", value: 10 }, { "trait_type": "valid", value: "sports" }]
+        attributes: [{ name: "discount_percent", value: 10 }, { name: "valid", value: "sports" }]
     });
     showResponse(await http.get("/offers/0000000000000000000000000000000100000000000000000000000000000001"));
     showResponse(await http.get("/offers/0000000000000000000000000000000100000000000000000000000000000003"));

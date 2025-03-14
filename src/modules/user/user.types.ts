@@ -1,4 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
+import { IsNotEmpty } from "class-validator";
 import { Wallet } from "ethers";
 import { User } from "../../entities/user.entity";
 
@@ -24,6 +25,7 @@ export class UserDTO {
 }
 
 export class CreateUserCommand {
+	@IsNotEmpty()
 	@ApiProperty({
 		description: "Unique identifier for the user to create",
 		type: String,
