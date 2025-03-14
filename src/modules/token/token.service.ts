@@ -140,7 +140,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
                 $group: {
                     _id: "$requestId",
                     amount: { $first: "$amount" },
-                    destinationLists: { $addToSet: "$destinations" },
+                    destinationLists: { $push: "$destinations" },
                     statuses: { $addToSet: "$status" },
                     timestamp: { $min: "$createdAt" }
                 }
