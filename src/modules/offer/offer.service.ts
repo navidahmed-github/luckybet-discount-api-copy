@@ -208,7 +208,14 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
             offerInstance = undefined;
         this._logger.verbose(`Create template for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
         const id = (await this._templateRepository.findOne({ where: { offerType, offerInstance } }))?.id;
-        await this._templateRepository.save({ ...(id && { id }), offerType, metadata, ...(offerInstance && { offerInstance }) });
+        const record = { offerType, metadata, ...(offerInstance && { offerInstance }) };
+        // when performing an update via save, TypeORM tries to work out the difference but doesn't handle empty arrays or
+        // missing fields properly so just force it instead 
+        if (id) {
+            await this._templateRepository.update(id, record);
+        } else {
+            await this._templateRepository.save(record);
+        }
     }
 
     public async deleteTemplate(offerType: number, offerInstance?: number): Promise<void> {
@@ -226,7 +233,12 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
             offerInstance = undefined;
         this._logger.verbose(`Upload ${format} for type: ${offerType}` + (offerInstance ? ` overriding instance: ${offerInstance}` : ""));
         const id = (await this._imageRepository.findOne({ where: { offerType, offerInstance } }))?.id;
-        await this._imageRepository.save({ ...(id && { id }), offerType, format, data, ...(offerInstance && { offerInstance }) });
+        const record = { offerType, format, data, ...(offerInstance && { offerInstance }) };
+        if (id) {
+            await this._imageRepository.update(id, record);
+        } else {
+            await this._imageRepository.save(record);
+        }
     }
 
     public async deleteImage(offerType: number, offerInstance?: number): Promise<void> {
