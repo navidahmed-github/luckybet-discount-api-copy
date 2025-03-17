@@ -87,6 +87,14 @@ export class OfferDTO {
     offerName?: string;
 }
 
+export class NextOfferDTO {
+    @ApiProperty({
+        description: "Next unused offer type",
+        type: String,
+    })
+    nextOfferType: number;
+}
+
 export class OfferHistoryDTO extends TransferHistoryDTO {
     @ApiProperty({
         description: "Token identifier of offer transferred",
@@ -188,6 +196,7 @@ export interface IOfferService {
     activate(userId: string, tokenId: bigint): Promise<RawTransfer>;
     transfer(from: ISource, to: IDestination, tokenId: bigint): Promise<RawTransfer>;
     getTemplates(): Promise<Template[]>;
+    getNextOfferType(partner: string): Promise<number>; 
     createTemplate(offerType: number, metadata: Metadata, offerInstance?: number): Promise<void>;
     deleteTemplate(offerType: number, offerInstance?: number): Promise<void>;
     uploadImage(offerType: number, format: MimeType, data: Buffer, offerInstance?: number): Promise<void>;

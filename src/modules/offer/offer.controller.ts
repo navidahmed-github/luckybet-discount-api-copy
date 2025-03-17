@@ -9,7 +9,7 @@ import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { Template } from "../../entities/template.entity";
-import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails, OfferDTO, ImageDTO, TransformedMetadata } from "./offer.types";
+import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails, OfferDTO, ImageDTO, TransformedMetadata, NextOfferDTO } from "./offer.types";
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
@@ -125,6 +125,18 @@ export class OfferController {
     })
     async getTemplates(): Promise<TemplateDTO[]> {
         return this._offerService.getTemplates().then(o => o.map(this.toTemplateDTO));
+    }
+
+    @Get("template/next")
+    @Roles(Role.Admin, Role.Partner)
+    @ApiOperation({ summary: "Get next unused offer type" })
+    @ApiOkResponse({
+        description: "Next offer type was returned successfully",
+        type: NextOfferDTO,
+    })
+    async getTemplateNextOfferType(@Request() req): Promise<NextOfferDTO> {
+        const nextOfferType = await this._offerService.getNextOfferType(req.user.partner);
+        return { nextOfferType };
     }
 
     @Put("template/:offerType/:offerInstance?")

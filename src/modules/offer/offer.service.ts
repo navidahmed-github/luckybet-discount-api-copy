@@ -203,6 +203,13 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         return this._templateRepository.find({ order: { offerType: "ASC", offerInstance: "ASC" } });
     }
 
+    public async getNextOfferType(_partner: string): Promise<number> {
+        const result = await this._templateRepository.aggregate([
+            { $group: { _id: null, maxOfferType: { $max: "$offerType" } } }
+        ]).next() as any;
+        return (result?.maxOfferType ?? 0) + 1;
+    }
+
     public async createTemplate(offerType: number, metadata: Metadata, offerInstance?: number): Promise<void> {
         if (offerInstance === 0)
             offerInstance = undefined;
