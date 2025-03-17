@@ -13,7 +13,7 @@ import { User } from "../src/entities/user.entity";
 import { IUserService } from "../src/modules/user/user.types";
 import { IOfferService } from "../src/modules/offer/offer.types";
 import { UserService } from "../src/modules/user/user.service";
-import { OfferService } from "../src/modules/offer/offer.service";
+import { OfferService, OfferServiceSettingKeys } from "../src/modules/offer/offer.service";
 import { IWalletService, WalletService, WalletServiceSettingKeys } from "../src/services/wallet.service";
 import { IContractService } from "../src/services/contract.service";
 import { MockContractService } from "./mocks/contract.service";
@@ -54,7 +54,10 @@ describe("Offers", () => {
                             if (key === WalletServiceSettingKeys.WALLET_GAS_AMOUNT) {
                                 return "0.1";
                             }
-                            return key;
+                            if (key === OfferServiceSettingKeys.ATTRIBUTE_OTHER_MAPPING) {
+                                return "type";
+                            }
+                            return undefined;
                         },
                     },
                 },
@@ -261,7 +264,7 @@ describe("Offers", () => {
         const offer = {
             name: "10% Discount",
             description: "10% of your next bet on the horses",
-            attributes: [{ name: "discount_percent", value: 10, type: "number" }, { name: "valid", value: "horses" }]
+            attributes: [{ name: "discount_percent", value: 10, other: "number" }, { name: "valid", value: "horses" }]
         };
         const enhancedOffer = {
             name: "10% Discount (Enhanced)",
@@ -271,11 +274,16 @@ describe("Offers", () => {
         await offerService.createTemplate(3, offer);
         await offerService.createTemplate(3, enhancedOffer, 4);
         expect(await offerService.getMetadata(1, 1)).toBeUndefined();
-        expect(await offerService.getMetadata(3, 1, true)).toStrictEqual({ ...offer, usesDefault: true });
+        // 'other' field in attributes should be renamed to 'type' 
+        const transformOffer = {
+            ...offer,
+            attributes: offer.attributes.map(a => ({ name: a.name, value: a.value, ...(a.other && { type: a.other }) }))
+        };
+        expect(await offerService.getMetadata(3, 1, true)).toStrictEqual({ ...transformOffer, usesDefault: true });
         expect(await offerService.getMetadata(3, 4, true)).toStrictEqual({ ...enhancedOffer, usesDefault: false });
 
         await offerService.deleteTemplate(3, 4);
-        expect(await offerService.getMetadata(3, 4, true)).toStrictEqual({ ...offer, usesDefault: true });
+        expect(await offerService.getMetadata(3, 4, true)).toStrictEqual({ ...transformOffer, usesDefault: true });
 
         await offerService.deleteTemplate(3);
         expect(await offerService.getMetadata(3, 1, true)).toBeUndefined();

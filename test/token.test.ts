@@ -57,7 +57,7 @@ describe("Tokens", () => {
                             if (key === TokenServiceSettingKeys.AIRDROP_CHUNK_SIZE) {
                                 return "10";
                             }
-                            return key;
+                            return undefined;
                         },
                     },
                 },

@@ -123,10 +123,10 @@ export class AttributeDTO {
     value: string | number;
 
     @ApiProperty({
-        description: "Type of attribute",
+        description: "Attribute which can be allocated for any purpose (say type)",
         type: Object,
     })
-    type?: string;
+    other?: string;
 }
 
 export class TemplateDTO {
@@ -168,6 +168,10 @@ export class ImageDTO {
         type: String,
     })
     dataUrl?: string;
+}
+
+export type TransformedMetadata = Omit<Metadata, "attributes"> & {
+    attributes: any[];
 }
 
 export type MetadataDetails = {

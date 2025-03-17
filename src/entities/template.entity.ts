@@ -9,7 +9,7 @@ export class Attribute {
 	value: string | number;
 
 	@Column()
-	type?: string
+	other?: string
 }
 
 Entity()

@@ -36,6 +36,10 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
         this._provider = ethereumProviderService.getProvider();
     }
 
+    // the server will register for events on start-up via this function, this is the simplest method and works fine
+    // for single instances; it will work for multiple although there will be transfers continually rejected for
+    // other instances which is inefficient. Once scaling reaches a sufficient level this should be converted to
+    // use a job instead
     public async onModuleInit() {
         this._disableListener = false;
         this._event = await this.getContract();
@@ -50,6 +54,8 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
         this._event?.off("Transfer");
     }
 
+    // note that the summary values below are derived from the events stored in the database; if the server misses 
+    // some events say because it is down for a long period of time then these results may be slightly inaccurate 
     protected async getSummary(name: string): Promise<TransferSummaryDTO> {
         const existsClause = {};
         existsClause[name] = { $exists: true };

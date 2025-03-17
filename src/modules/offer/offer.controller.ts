@@ -8,8 +8,8 @@ import { OfferNotFoundError, OfferTokenIdError, UserMissingIdError } from "../..
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { RawTransfer } from "../../entities/transfer.entity";
-import { Metadata, Template } from "../../entities/template.entity";
-import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails, OfferDTO, ImageDTO } from "./offer.types";
+import { Template } from "../../entities/template.entity";
+import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails, OfferDTO, ImageDTO, TransformedMetadata } from "./offer.types";
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
@@ -161,7 +161,25 @@ export class OfferController {
         await this._offerService.deleteTemplate(offerType, offerInstance);
     }
 
-    @Put("image/:offerType/:offerInstance?")
+    @Get("template-image/:offerType/:offerInstance?")
+    @ApiOperation({ summary: "Get image for an offer type/instance" })
+    @ApiParamOfferType()
+    @ApiParamOfferInstance()
+    @ApiOkResponse({
+        description: "The image was returned successfully",
+        type: ImageDTO
+    })
+    async imgTemplate(
+        @Param("offerType", new ParseIntPipe()) offerType: number,
+        @Param("offerInstance", new ParseIntPipe({ optional: true })) offerInstance?: number
+    ): Promise<ImageDTO> {
+        // this is less efficient than the streamable file used for the standard image retrieval but is simpler
+        // and only used on the portal anyway 
+        const image = await this._offerService.getImage(offerType, offerInstance);
+        return image ? { dataUrl: `data:${image.format};base64,${image.data.toString('base64')}` } : {};
+    }
+
+    @Put("template-image/:offerType/:offerInstance?")
     @Roles(Role.Admin, Role.Partner)
     @ApiOperation({ summary: "Add/update image for an offer type/instance" })
     @ApiParamOfferType()
@@ -184,7 +202,7 @@ export class OfferController {
         await this._offerService.uploadImage(offerType, format, file.buffer, offerInstance);
     }
 
-    @Delete("image/:offerType/:offerInstance?")
+    @Delete("template-image/:offerType/:offerInstance?")
     @Roles(Role.Admin, Role.Partner)
     @ApiOperation({ summary: "Delete image for an offer type/instance" })
     @ApiParamOfferType()
@@ -201,24 +219,6 @@ export class OfferController {
         await this._offerService.deleteImage(offerType, offerInstance);
     }
 
-    @Get("imageTemplate/:offerType/:offerInstance?") // !! clean-up
-    @ApiOperation({ summary: "Get image for an offer type/instance" })
-    @ApiParamOfferType()
-    @ApiParamOfferInstance()
-    @ApiOkResponse({
-        description: "The image was returned successfully",
-        type: ImageDTO
-    })
-    async imgTemplate(
-        @Param("offerType", new ParseIntPipe()) offerType: number,
-        @Param("offerInstance", new ParseIntPipe({ optional: true })) offerInstance?: number
-    ): Promise<ImageDTO> {
-        // This is less efficient than the streamable file used for the standard image retrieval but is simpler
-        // and only used on the portal anyway 
-        const image = await this._offerService.getImage(offerType, offerInstance);
-        return image ? { dataUrl: `data:${image.format};base64,${image.data.toString('base64')}` } : {};
-    }
-
     // DO NOT reorder this method, it should always be last so the more specific overrides above take precedence
     @Get(":tokenId")
     @ApiOperation({ summary: "Get metadata associated with token identifier" })
@@ -233,7 +233,7 @@ export class OfferController {
     async metadata(
         @Param("tokenId") tokenId: string,
         @Query("detailed", new ParseBoolPipe({ optional: true })) detailed?: boolean
-    ): Promise<Metadata & MetadataDetails & { image: string }> {
+    ): Promise<TransformedMetadata & MetadataDetails & { image: string }> {
         if (tokenId.length != 64) {
             throw new OfferTokenIdError("Invalid format for token identifier");
         }

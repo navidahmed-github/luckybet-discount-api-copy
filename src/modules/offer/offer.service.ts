@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { Contract, EventLog, id, TransactionReceipt, ZeroAddress } from "ethers";
@@ -11,14 +12,21 @@ import { Metadata, Template } from "../../entities/template.entity";
 import { OfferImage } from "../../entities/image.entity";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
-import { IOfferService, MetadataDetails, OfferDTO, OfferHistoryDTO } from "./offer.types";
+import { IOfferService, MetadataDetails, OfferDTO, OfferHistoryDTO, TransformedMetadata } from "./offer.types";
 import { TransferService } from "../../services/transfer.service";
 
 export const TRANSFER_TOPIC = id("Transfer(address,address,uint256)");
 
+export enum OfferServiceSettingKeys {
+    ATTRIBUTE_NAME_MAPPING = "ATTRIBUTE_NAME_MAPPING",
+    ATTRIBUTE_OTHER_MAPPING = "ATTRIBUTE_OTHER_MAPPING"
+}
+
 @Injectable()
 export class OfferService extends TransferService<OfferHistoryDTO> implements IOfferService {
     constructor(
+        private readonly config: ConfigService,
+
         @Inject(ProviderTokens.WalletService)
         private readonly _walletService: IWalletService,
 
@@ -37,12 +45,22 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         super(new Logger(OfferService.name), ethereumProviderService, userRepository);
     }
 
-    public async getMetadata(offerType: number, offerInstance: number, detailed?: boolean): Promise<Metadata & MetadataDetails> {
+    public async getMetadata(offerType: number, offerInstance: number, detailed?: boolean): Promise<TransformedMetadata & MetadataDetails> {
         const [template, overriden] = await this.getWithFallback(this._templateRepository, offerType, offerInstance);
         if (!template?.metadata) {
-            return undefined
-        } else if (!detailed) {
-            return template.metadata;
+            return undefined;
+        }
+        const nameMapping = this.config.get(OfferServiceSettingKeys.ATTRIBUTE_NAME_MAPPING) ?? "name";
+        const otherMapping = this.config.get(OfferServiceSettingKeys.ATTRIBUTE_OTHER_MAPPING) ?? "other";
+        const metadata = {
+            ...template.metadata, attributes: template.metadata.attributes.map(a => ({
+                value: a.value,
+                [nameMapping]: a.name,
+                ...(a.other && { [otherMapping]: a.other })
+            }))
+        };
+        if (!detailed) {
+            return metadata;
         }
         const mint = await this._transferRepository.findOne({
             where: {
@@ -52,7 +70,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
             }
         });
         const additionalInfo = mint?.offer?.additionalInfo;
-        return { ...template.metadata, usesDefault: !overriden, ...(additionalInfo && { additionalInfo }) };
+        return { ...metadata, usesDefault: !overriden, ...(additionalInfo && { additionalInfo }) };
     }
 
     public async getImage(offerType: number, offerInstance: number): Promise<OfferImage> {

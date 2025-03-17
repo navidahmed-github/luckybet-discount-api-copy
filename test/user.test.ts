@@ -31,7 +31,7 @@ describe("Users", () => {
                             if (key === WalletServiceSettingKeys.GAS_STATION_WALLET_PRIVATE_KEY) {
                                 return "0x0773d4501bda47ef17e1d32b8d66c07a196858b66f739b608bde85e835f3498b";
                             }
-                            return key;
+                            return undefined;
                         },
                     },
                 },
