@@ -146,6 +146,7 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
                     ...dto,
                     contractAddress: stake.contractAddress,
                     stakedAmount: fromTokenNative(BigInt(stake.stakedAmount)),
+                    txHash: stake.txHash,
                     timestamp: stake.blockTimestamp
                 };
             } catch (err) {

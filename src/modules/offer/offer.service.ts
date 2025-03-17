@@ -4,7 +4,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { Contract, EventLog, id, TransactionReceipt, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { callContract, formatTokenId, getTokenId, IDestination, ISource, MimeType, parseDestination, splitTokenId, toAdminString } from "../../common.types";
+import { callContract, formatTokenId, getTokenId, IDestination, ISource, MimeType, parseDestination, splitTokenId, toAdminString, toNumberSafe } from "../../common.types";
 import { InsufficientBalanceError, NotApprovedError, OfferTokenIdError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { User } from "../../entities/user.entity";
@@ -12,7 +12,7 @@ import { Metadata, Template } from "../../entities/template.entity";
 import { OfferImage } from "../../entities/image.entity";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
-import { IOfferService, MetadataDetails, OfferDTO, OfferHistoryDTO, TransformedMetadata } from "./offer.types";
+import { IOfferService, MetadataDetails, OfferDTO, OfferHistoryDTO, OfferSummaryDTO, TransformedMetadata } from "./offer.types";
 import { TransferService } from "../../services/transfer.service";
 
 export const TRANSFER_TOPIC = id("Transfer(address,address,uint256)");
@@ -43,6 +43,24 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         private readonly _imageRepository: MongoRepository<OfferImage>,
     ) {
         super(new Logger(OfferService.name), ethereumProviderService, userRepository);
+    }
+
+    public async getSummary(): Promise<OfferSummaryDTO> {
+        const offer = await this._contractService.offerContract();
+        const transferSummary = await super.getSummary("offer");
+        const totalSupply = toNumberSafe(await offer.totalSupply());
+        const totalOfferTypes = toNumberSafe(await offer.totalTypes());
+        const topMintedTypes = await this._transferRepository.aggregate([
+            { $match: { $and: [{ offer: { $exists: true } }, { fromAddress: ZeroAddress }] } },
+            { $group: { _id: "$offer.offerType", mintedCount: { $sum: 1 } } },
+            { $sort: { mintedCount: -1 } },
+            { $limit: 3 }
+        ]).toArray() as any;
+        const topOfferTypes = await Promise.all(topMintedTypes.map(async t => {
+            const template = await this._templateRepository.findOne({ where: { offerType: t._id, offerInstance: undefined } });
+            return { offerType: t._id, ...(template?.metadata?.name && { offerName: template.metadata.name }) };
+        }));
+        return { ...transferSummary, totalSupply, totalOfferTypes, topOfferTypes };
     }
 
     public async getMetadata(offerType: number, offerInstance: number, detailed?: boolean): Promise<TransformedMetadata & MetadataDetails> {

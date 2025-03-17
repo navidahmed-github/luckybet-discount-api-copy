@@ -84,6 +84,12 @@ export class StakeHistoryDTO {
     rewardAmount?: number;
 
     @ApiProperty({
+        description: "Transaction hash associated with stake",
+        type: String,
+    })
+    txHash: string;
+
+    @ApiProperty({
         description: "Timestamp when the event occurred",
         type: Number,
     })

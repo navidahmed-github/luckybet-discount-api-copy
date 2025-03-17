@@ -53,8 +53,8 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
 
     public async getSummary(): Promise<TokenSummaryDTO> {
         const token = await this._contractService.tokenContract();
-        const totalSupply = toNumberSafe(await token.totalSupply());
         const transferSummary = await super.getSummary("token");
+        const totalSupply = toNumberSafe(await token.totalSupply());
         const totalMinted = await this.getAmountTotals({ fromAddress: ZeroAddress });
         const totalBurnt = await this.getAmountTotals({ toAddress: ZeroAddress });
         return { ...transferSummary, totalSupply, totalMinted, totalBurnt };

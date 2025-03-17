@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsArray, IsNotEmpty, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
-import { DestinationDTO, IDestination, ISource, MimeType, TransferHistoryDTO } from "../../common.types";
+import { DestinationDTO, IDestination, ISource, MimeType, TransferHistoryDTO, TransferSummaryDTO } from "../../common.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { Metadata, Template } from "../../entities/template.entity";
 import { OfferImage } from "../../entities/image.entity";
@@ -87,12 +87,47 @@ export class OfferDTO {
     offerName?: string;
 }
 
+export class OfferTypeDTO {
+    @ApiProperty({
+        description: "Type of offer",
+        type: String,
+    })
+    offerType: string;
+
+    @ApiProperty({
+        description: "Name of offer type",
+        type: String,
+    })
+    offerName?: string;
+}
+
 export class NextOfferDTO {
     @ApiProperty({
         description: "Next unused offer type",
         type: String,
     })
     nextOfferType: number;
+}
+
+export class OfferSummaryDTO extends TransferSummaryDTO {
+    @ApiProperty({
+        description: "Current total supply of offers",
+        type: Number,
+    })
+    totalSupply: number;
+
+    @ApiProperty({
+        description: "Number of unique offer types minted",
+        type: Number,
+    })
+    totalOfferTypes: number;
+
+    @ApiProperty({
+        description: "Most minted offer types",
+        type: () => OfferTypeDTO,
+        isArray: true
+    })
+    topOfferTypes: OfferTypeDTO[];
 }
 
 export class OfferHistoryDTO extends TransferHistoryDTO {
@@ -188,6 +223,7 @@ export type MetadataDetails = {
 }
 
 export interface IOfferService {
+    getSummary(): Promise<OfferSummaryDTO>;
     getMetadata(offerType: number, offerInstance: number, detailed?: boolean): Promise<Metadata>;
     getImage(offerType: number, offerInstance: number): Promise<OfferImage>;
     getOffers(dest: IDestination, shortId?: boolean): Promise<OfferDTO[]>;
@@ -196,7 +232,7 @@ export interface IOfferService {
     activate(userId: string, tokenId: bigint): Promise<RawTransfer>;
     transfer(from: ISource, to: IDestination, tokenId: bigint): Promise<RawTransfer>;
     getTemplates(): Promise<Template[]>;
-    getNextOfferType(partner: string): Promise<number>; 
+    getNextOfferType(partner: string): Promise<number>;
     createTemplate(offerType: number, metadata: Metadata, offerInstance?: number): Promise<void>;
     deleteTemplate(offerType: number, offerInstance?: number): Promise<void>;
     uploadImage(offerType: number, format: MimeType, data: Buffer, offerInstance?: number): Promise<void>;

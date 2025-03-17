@@ -9,7 +9,7 @@ import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { Template } from "../../entities/template.entity";
-import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails, OfferDTO, ImageDTO, TransformedMetadata, NextOfferDTO } from "./offer.types";
+import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails, OfferDTO, ImageDTO, TransformedMetadata, NextOfferDTO, OfferSummaryDTO } from "./offer.types";
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
@@ -42,6 +42,17 @@ export class OfferController {
         @Inject(ProviderTokens.OfferService)
         private _offerService: IOfferService,
     ) { }
+
+    @Get("summary")
+    @Roles(Role.Admin, Role.User)
+    @ApiOperation({ summary: "Get offer summary details" })
+    @ApiOkResponse({
+        description: "Summary was returned successfully",
+        type: OfferSummaryDTO
+    })
+    async summary(): Promise<OfferSummaryDTO> {
+        return this._offerService.getSummary();
+    }
 
     @Get("owned")
     @Roles(Role.Admin, Role.User)
