@@ -1,6 +1,7 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Contract, InterfaceAbi, Wallet } from "ethers";
+import { ContractError } from "src/error.types";
 import { ProviderTokens } from "../providerTokens";
 import { Deployment, IProviderService } from "./ethereumProvider.service";
 
@@ -47,6 +48,9 @@ export class ContractService implements IContractService {
 
     private async getContract(address: string, abi: InterfaceAbi, wallet?: Wallet) {
         const provider = this.ethereumProviderService.getProvider();
+        if (await provider.getCode(address) === "0x") {
+            throw new ContractError(`Contract does not exist at ${address}`);
+        }
         if (wallet) {
             wallet = wallet.connect(provider);
         }
