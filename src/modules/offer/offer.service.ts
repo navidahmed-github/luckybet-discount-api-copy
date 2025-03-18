@@ -298,6 +298,6 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
     }
 
     private addTokenId(transfer: RawTransfer, tokenId: bigint): RawTransfer & { offer: { tokenId: string } } {
-        return { ...transfer, offer: { ...transfer.offer, tokenId: formatTokenId(tokenId) } };
+        return { ...transfer, offer: { ...transfer.offer, tokenId: formatTokenId(tokenId, true) } };
     }
 }

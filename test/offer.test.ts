@@ -141,7 +141,7 @@ describe("Offers", () => {
         expect(transferRepository.save).toHaveBeenCalledTimes(4);
         const expected: any = { fromAddress: ZeroAddress, toAddress: users[0].address, offer: { offerType: 3, offerInstance: 2 } };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
-        expected.offer.tokenId = formatTokenId(getTokenId(3, 2));
+        expected.offer.tokenId = formatTokenId(getTokenId(3, 2), true);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 
@@ -162,7 +162,7 @@ describe("Offers", () => {
             offer: { ...splitTokenId(tokenId), additionalInfo: "More details" }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
-        expected.offer.tokenId = "0x0000000000000000000000000000000300000000000000000000000000000001";
+        expected.offer.tokenId = "0x300000000000000000000000000000001";
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 
@@ -190,7 +190,7 @@ describe("Offers", () => {
             offer: { ...splitTokenId(tokenId) }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
-        expected.offer.tokenId = formatTokenId(tokenId);
+        expected.offer.tokenId = formatTokenId(tokenId, true);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 
@@ -210,7 +210,7 @@ describe("Offers", () => {
             offer: { ...splitTokenId(tokenId) }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
-        expected.offer.tokenId = formatTokenId(tokenId);
+        expected.offer.tokenId = formatTokenId(tokenId, true);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 
@@ -231,7 +231,7 @@ describe("Offers", () => {
             offer: { ...splitTokenId(tokenId) }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
-        expected.offer.tokenId = formatTokenId(tokenId);
+        expected.offer.tokenId = formatTokenId(tokenId, true);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
 
         rawTransfer = await offerService.transfer({ userId: users[1].userId, asAdmin: true }, { userId: users[2].userId }, tokenId);
@@ -244,7 +244,7 @@ describe("Offers", () => {
             offer: { ...splitTokenId(tokenId) }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
-        expected.offer.tokenId = formatTokenId(tokenId);
+        expected.offer.tokenId = formatTokenId(tokenId, true);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
 
         rawTransfer = await offerService.transfer({ userId: users[2].userId }, { address: TEST_ADDRESS }, tokenId);
@@ -256,7 +256,7 @@ describe("Offers", () => {
             offer: { ...splitTokenId(tokenId) }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
-        expected.offer.tokenId = formatTokenId(tokenId);
+        expected.offer.tokenId = formatTokenId(tokenId, true);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 
