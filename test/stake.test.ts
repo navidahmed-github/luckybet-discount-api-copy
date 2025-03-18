@@ -156,9 +156,9 @@ describe("Staking", () => {
 
         const history = await stakeService.getHistory({ userId: user.userId });
         const expected = [
-            { type: StakeType.Deposit, contractAddress: contractAddresses[0], stakedAmount: 500 },
-            { type: StakeType.Deposit, contractAddress: contractAddresses[1], stakedAmount: 1000 },
-            { type: StakeType.Withdrawal, contractAddress: contractAddresses[0], stakedAmount: 300, rewardAmount: 50 }
+            { type: StakeType.Deposit, contractAddress: contractAddresses[0], staked: 500 },
+            { type: StakeType.Deposit, contractAddress: contractAddresses[1], staked: 1000 },
+            { type: StakeType.Withdrawal, contractAddress: contractAddresses[0], staked: 300, reward: 50 }
         ]
         expect(history.length).toEqual(expected.length);
         for (let i = 0; i < expected.length; i++)

@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Contract, InterfaceAbi, Wallet } from "ethers";
-import { ContractError } from "src/error.types";
+import { ContractError } from "../error.types";
 import { ProviderTokens } from "../providerTokens";
 import { Deployment, IProviderService } from "./ethereumProvider.service";
 

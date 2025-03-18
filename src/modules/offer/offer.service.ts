@@ -154,7 +154,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
             } else if (await adminToken.allowance(toAddress, adminWallet.address) < amount) {
                 throw new NotApprovedError(`Offer requires admin wallet: ${adminWallet.address} to be approved to transfer tokens`);
             }
-            const partnerAddress = this._walletService.getLuckyBetWallet().address; // !! replace with partner wallet
+            const partnerAddress = this._walletService.getLuckyBetWallet().address; // TODO: replace with partner wallet
             const txToken = await callContract(() => adminToken.transferFrom(toAddress, partnerAddress, amount), adminToken);
             const txTokenReceipt = await txToken.wait();
             txOffer = await callContract(() => adminOffer["mint(address,uint128,(bytes32))"](

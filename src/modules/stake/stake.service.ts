@@ -140,12 +140,12 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         function toHistory(stake: Stake): StakeHistoryDTO {
             try {
                 const dto = stake.withdraw ?
-                    { type: StakeType.Withdrawal, rewardAmount: fromTokenNative(BigInt(stake.withdraw.rewardAmount)) } :
+                    { type: StakeType.Withdrawal, reward: fromTokenNative(BigInt(stake.withdraw.rewardAmount)) } :
                     { type: StakeType.Deposit }
                 return {
                     ...dto,
                     contractAddress: stake.contractAddress,
-                    stakedAmount: fromTokenNative(BigInt(stake.stakedAmount)),
+                    staked: fromTokenNative(BigInt(stake.stakedAmount)),
                     txHash: stake.txHash,
                     timestamp: stake.blockTimestamp
                 };

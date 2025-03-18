@@ -55,7 +55,7 @@ export class StakeStatusDTO {
         description: "Amount of tokens which will be returned as a reward once unlocked stake withdrawn",
         type: Number,
     })
-    reward: number // !! inconsistent reward vs rewardAmount
+    reward: number;
 }
 
 export class StakeHistoryDTO {
@@ -75,13 +75,13 @@ export class StakeHistoryDTO {
         description: "Amount staked/returned",
         type: Number,
     })
-    stakedAmount: number;
+    staked: number;
 
     @ApiPropertyOptional({
         description: "Reward amount for withdrawals",
         type: Number,
     })
-    rewardAmount?: number;
+    reward?: number;
 
     @ApiProperty({
         description: "Transaction hash associated with stake",
