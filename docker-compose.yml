@@ -5,3 +5,20 @@ services:
             MONGO_INITDB_DATABASE: example
         ports:
             - "27018:27017"
+
+    api:
+      profiles: [api]
+      image: luckybet-discount-api
+      container_name: api
+      pull_policy: build
+      build: 
+        context: .
+      init: true
+      depends_on:
+        - mongo
+      ports: 
+        - 3005:3005
+      extra_hosts:
+        - "host.docker.internal:host-gateway" # Needed on linux to allow us to use "host.docker.internal" to connect to host's "localhost"
+      env_file:
+        - .env.docker

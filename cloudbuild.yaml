@@ -1,0 +1,10 @@
+steps:
+    - name: "gcr.io/cloud-builders/docker"
+      entrypoint: "bash"
+      args: ["-c", "DOCKER_BUILDKIT=1 docker build . -t gcr.io/$PROJECT_ID/luckybet-discount-api:$_TAG"]
+images:
+    - "gcr.io/$PROJECT_ID/luckybet-discount-api:$_TAG"
+substitutions:
+    _TAG: none # default value
+options:
+    logging: CLOUD_LOGGING_ONLY

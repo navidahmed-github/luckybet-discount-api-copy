@@ -167,7 +167,6 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         }
         return this.lockTransfer(async () => {
             const txOfferReceipt: TransactionReceipt = await txOffer.wait();
-            // !! need to check receipt status to check mined
             const tokenId: bigint = (txOfferReceipt.logs.find(l => l.topics[0] === TRANSFER_TOPIC) as EventLog)?.args[2];
             if (!tokenId) {
                 throw new OfferTokenIdError("Failed to read token identifier from event");
