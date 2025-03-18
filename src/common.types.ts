@@ -78,10 +78,10 @@ export class TransferSummaryDTO {
     totalTransfers: number;
 
     @ApiProperty({
-        description: "Total unique wallets which have had transfers to/from them",
+        description: "Total unique holders (those which have had transfers to/from them)",
         type: Number,
     })
-    uniqueWallets: number;
+    uniqueHolders: number;
 }
 
 export class TransferHistoryDTO {

@@ -118,7 +118,7 @@ export class StakeController {
     })
     async withdraw(@Request() req, @Param("address") address: string): Promise<StakeWithdrawDTO> {
         const stake = await this._stakeService.withdraw(address, req.user.id);
-        return { staked: fromTokenNative(BigInt(stake.stakedAmount)), rewards: fromTokenNative(BigInt(stake.withdraw.rewardAmount)) };
+        return { staked: fromTokenNative(BigInt(stake.stakedAmount)), reward: fromTokenNative(BigInt(stake.withdraw.rewardAmount)) };
     }
 
     private toDTO(contract: DeployedContract): StakeContractDTO {

@@ -107,7 +107,7 @@ export class StakeWithdrawDTO {
         description: "Amount of reward returned",
         type: Number,
     })
-    rewards: number;
+    reward: number;
 }
 
 export interface IStakeService {

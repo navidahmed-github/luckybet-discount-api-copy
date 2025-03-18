@@ -62,14 +62,14 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
         const total = await this._transferRepository.count(existsClause);
         const totalMints = await this._transferRepository.count({ $and: [existsClause, { fromAddress: ZeroAddress }] });
         const totalBurns = await this._transferRepository.count({ $and: [existsClause, { toAddress: ZeroAddress }] });
-        const { uniqueWallets } = await this._transferRepository.aggregate([
+        const totalUnique = await this._transferRepository.aggregate([
             { $match: existsClause },
             { $project: { addresses: ["$fromAddress", "$toAddress"] } },
             { $unwind: "$addresses" },
             { $group: { _id: "$addresses" } },
-            { $count: "uniqueWallets" }
+            { $count: "holders" }
         ]).next() as any;
-        return { totalMints, totalBurns, totalTransfers: total - totalMints - totalBurns, uniqueWallets };
+        return { totalMints, totalBurns, totalTransfers: total - totalMints - totalBurns, uniqueHolders: totalUnique?.holders ?? 0 };
     }
 
     protected async getHistory(dest: IDestination, name: string, toDtoData: (t: Transfer) => Promise<Omit<T, "type" | "txHash" | "timestamp">>): Promise<T[]> {
