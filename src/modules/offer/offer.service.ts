@@ -51,14 +51,25 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         const totalSupply = toNumberSafe(await offer.totalSupply());
         const totalOfferTypes = toNumberSafe(await offer.totalTypes());
         const topMintedTypes = await this._transferRepository.aggregate([
-            { $match: { $and: [{ offer: { $exists: true } }, { fromAddress: ZeroAddress }] } },
-            { $group: { _id: "$offer.offerType", mintedCount: { $sum: 1 } } },
-            { $sort: { mintedCount: -1 } },
+            { $match: { offer: { $exists: true } } },
+            {
+                $group: {
+                    _id: "$offer.offerType",
+                    totalMints: { $sum: { $cond: { if: { $eq: ["$fromAddress", ZeroAddress] }, then: 1, else: 0 } } },
+                    totalBurns: { $sum: { $cond: { if: { $eq: ["$toAddress", ZeroAddress] }, then: 1, else: 0 } } }
+                }
+            },
+            { $sort: { totalMints: -1 } },
             { $limit: 3 }
         ]).toArray() as any;
         const topOfferTypes = await Promise.all(topMintedTypes.map(async t => {
             const template = await this._templateRepository.findOne({ where: { offerType: t._id, offerInstance: undefined } });
-            return { offerType: t._id, ...(template?.metadata?.name && { offerName: template.metadata.name }) };
+            return {
+                offerType: t._id,
+                totalMints: t.totalMints,
+                totalBurns: t.totalBurns,
+                ...(template?.metadata?.name && { offerName: template.metadata.name })                
+            };
         }));
         return { ...transferSummary, totalSupply, totalOfferTypes, topOfferTypes };
     }

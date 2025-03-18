@@ -85,7 +85,7 @@ const run = async () => {
     await catchResponse(() => http.get("/offers/0000000000000000000000000000000400000000000000000000000000000001"));
 
     showResponse(await admin.post("/offers/1", { to: { userId: "john.smith" }, amount: 5 }));
-    showResponse(await admin.post("/offers/3", { to: { address: "0x116B002A2593b9DD5a424ED81004A8F21BD6eEcd" }, amount: 0, additionalInfo: "Employee bonus" }));
+    showResponse(await admin.post("/offers/3", { to: { address: "0xfD295e9faA90F5a88b578c23FB97833db0DC7fcD" }, amount: 0, additionalInfo: "Employee bonus" }));
     showResponse(await admin.post("/offers/1", { to: { userId: "mary.jane" }, amount: 0 }));
     showResponse(await admin.post("/offers/0x100000000000000000000000000000001/transfer", { fromUserId: "john.smith", to: { userId: "mary.jane" } }));
     showResponse(await maryJane.post("/offers/0x100000000000000000000000000000002/transfer", { to: { userId: "john.smith" } }));

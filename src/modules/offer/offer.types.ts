@@ -99,6 +99,18 @@ export class OfferTypeDTO {
         type: String,
     })
     offerName?: string;
+
+    @ApiProperty({
+        description: "Total count of all mints that have occurred for this type",
+        type: Number,
+    })
+    totalMints: number;
+
+    @ApiProperty({
+        description: "Total count of all burns that have occurred for this type",
+        type: Number,
+    })
+    totalBurns: number;
 }
 
 export class NextOfferDTO {
