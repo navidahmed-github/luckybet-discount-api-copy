@@ -1,99 +1,83 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Lucky Bet Discount - API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Summary
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+REST API for the Lucky Bet platform
 
-## Description
+## Getting started
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+### 1. Configuration
 
-## Project setup
+An `.env` file needs to be placed at the root for the app to work. An example file named `.env.example` is provided. Once deployed to 
+Google Cloud this file will be replaced by the variables defined as part of the Cloud Run configuration
 
-```bash
-$ yarn install
-```
+This is a summary of the environment variables:
 
-## Compile and run the project
+| Name                           | Required  | Secret | Description |
+|--------------------------------|-----------|--------|-------------|
+| PORT                           | N         | N      | Port on which the API will listen for requests (default: 3005) |
+| MONGO_CONNECTION_STRING        | Y         | Y      | Connection string to the MongoDB instance |
+| PROVIDER_URL                   | Y         | Y      | URL to RPC provider used to connect to chain |
+| JWT_SECRET                     | Y         | Y      | Secret used to verify that JWT has been issued by Lucky Bet <br/> MUST match that configured on the Lucky Bet authentication server | 
+| WALLET_MNEMONIC                | Y         | Y      | Used to generate user private keys and associated wallet addresses |
+| ADMIN_WALLET_PRIVATE_KEY       | Y         | Y      | Private key for the wallet which is used to perform all administrator actions on contracts <br/> MUST correspond to address of owner for contracts |
+| LUCKYBET_WALLET_PRIVATE_KEY    | Y         | Y      | Private key for Lucky Bet wallet where tokens end up when converted to offers |
+| GAS_STATION_WALLET_PRIVATE_KEY | Y         | Y      | Private key for wallet containing a pool of ETH which is used to fund contract operations |
+| WALLET_GAS_AMOUNT              | Y         | N      | The amount to top-up a wallet if it is low on funds when attempting to execute contract operation |
+| TOKEN_CONTRACT_ADDRESS         | Y         | N      | Deployed address of token contract |
+| OFFER_CONTRACT_ADDRESS         | Y         | N      | Deployed address of offer contract |
+| ENABLE_SWAGGER                 | Y         | N      | Indicates whether swagger documentation will be available |
+| AIRDROP_CHUNK_SIZE             | N         | N      | Specifies how many addresses are minted to per block when performing airdrops |
+| ATTRIBUTE_NAME_MAPPING         | N         |N       | Allow the 'name' field for an attribute to be renamed when retrieving metadata <br/> This is potentially useful if wanting to map to OpenSea standard so set to 'trait_type' for example |
+| ATTRIBUTE_OTHER_MAPPING        | N         | N      | Allow the 'other' field for an attribute to renamed when retrieving metadata <br/> This will nearly always be mapped to some type field such as 'display_type'
 
-```bash
-# development
-$ yarn run start
+### 2. Database
 
-# watch mode
-$ yarn run start:dev
+A local MongoDB instance can be run via `docker compose`
 
-# production mode
-$ yarn run start:prod
-```
+> docker compose up
 
-## Run tests
+This will create an instance which can be accessed via this connection string (given in the example configuration above)
 
-```bash
-# unit tests
-$ yarn run test
+> mongodb://localhost:27018/luckybet
 
-# e2e tests
-$ yarn run test:e2e
 
-# test coverage
-$ yarn run test:cov
-```
+### 3. Run the service
 
-## Deployment
+To run the API:
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+> yarn start:dev
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+If using the default, simply browse to `https://localhost:3005/swagger`
 
-```bash
-$ yarn install -g mau
-$ mau deploy
-```
+## Commands
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+More details in the scripts section of `./package.json`
 
-## Resources
+### Installation
 
-Check out a few resources that may come in handy when working with NestJS:
+Download and install all dependencies into the `./node_modules` folder
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+> yarn
 
-## Support
+Build the project and output into the `./dist` folder
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+> yarn build
 
-## Stay in touch
+## Testing the app
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+To run the **unit** tests:
 
-## License
+> yarn test
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Cloud Deployment
+
+It is recommended that the API be deployed on Google Cloud using Cloud Run which is a serverless compute service (like AWS lambda). However, there is one caveat and that is that this service must be able to support background processing (ie. allow some CPU at all times) and be configured to do so as the API contains a job scheduling service used for airdrops - GCP supports this but AWS does not. 
+
+A `cloudbuid.yaml` has been provided that should be sufficient for use on GCP. In order to upload an image execute the following:
+
+> gcloud builds submit
+
+**It is strongly recommended that the following also be implemented:**
+- Cloudflare or some other equivalent be used in front of this service to mitigate against DDoS. 
+- Billing alerts are setup to notify if any unusual activity that could cause unexpectedly large bills (this is critical as the cloud providers do not generally allow maximum billing amounts to be set) 
