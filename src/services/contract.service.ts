@@ -48,10 +48,10 @@ export class ContractService implements IContractService {
 
     private async getContract(address: string, abi: InterfaceAbi, wallet?: Wallet) {
         const provider = this.ethereumProviderService.getProvider();
-        if (await provider.getCode(address) === "0x") {
-            throw new ContractError(`Contract does not exist at ${address}`);
-        }
         if (wallet) {
+            if (await provider.getCode(address) === "0x") {
+                throw new ContractError(`Contract does not exist at ${address}`);
+            }
             wallet = wallet.connect(provider);
         }
         return new Contract(address, abi, wallet ?? provider);

@@ -2,7 +2,19 @@
 
 ## Summary
 
-REST API for the Lucky Bet platform
+REST API for the Lucky Bet platform built using NestJS
+
+Code was developed against node version 20.18
+
+## Technology
+
+-   [Node.js](https://nodejs.org/en/) - Server environment
+-   [Typescript](https://www.typescriptlang.org/) - Programming language
+-   [Yarn](https://yarnpkg.com/) - Package manager
+-   [NestJS](https://nestjs.com/) - API framework
+-   [MongoDB](https://www.mongodb.com) - NoSQL database
+-   [Jest](https://jestjs.io/) - Testing framework
+-   [Swagger](https://swagger.io/) - API documentation
 
 ## Getting started
 
