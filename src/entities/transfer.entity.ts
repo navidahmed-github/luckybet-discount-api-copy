@@ -14,6 +14,9 @@ export class OfferTransfer {
 	@Column()
 	offerInstance: number;
 
+    @Column()
+	amount?: string;
+
 	@Column()
 	additionalInfo?: string;
 }

@@ -139,7 +139,7 @@ describe("Offers", () => {
         expect(await offerContract.ownerOf(getTokenId(3, 1))).toEqual(users[1].address);
         expect(await offerContract.ownerOf(getTokenId(3, 2))).toEqual(users[0].address);
         expect(transferRepository.save).toHaveBeenCalledTimes(4);
-        const expected: any = { fromAddress: ZeroAddress, toAddress: users[0].address, offer: { offerType: 3, offerInstance: 2 } };
+        const expected: any = { fromAddress: ZeroAddress, toAddress: users[0].address, offer: { offerType: 3, offerInstance: 2, amount: "0" } };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
         expected.offer.tokenId = formatTokenId(getTokenId(3, 2), true);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
@@ -159,7 +159,7 @@ describe("Offers", () => {
         const expected: any = {
             fromAddress: ZeroAddress,
             toAddress: users[0].address,
-            offer: { ...splitTokenId(tokenId), additionalInfo: "More details" }
+            offer: { ...splitTokenId(tokenId), amount: "100", additionalInfo: "More details" }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
         expected.offer.tokenId = "0x300000000000000000000000000000001";
@@ -187,14 +187,14 @@ describe("Offers", () => {
         const expected: any = {
             fromAddress: ZeroAddress,
             toAddress: wallet.address,
-            offer: { ...splitTokenId(tokenId) }
+            offer: { ...splitTokenId(tokenId), amount: "100" }
         };
         expect(transferRepository.save).toHaveBeenLastCalledWith(expect.objectContaining(expected));
         expected.offer.tokenId = formatTokenId(tokenId, true);
         expect(rawTransfer).toEqual(expect.objectContaining(expected));
     });
 
-    it("Should active offer", async () => {
+    it("Should activate offer", async () => {
         await offerService.create({ address: users[0].address }, 3, 0n);
         const tokenId = getTokenId(3, 1);
         expect(await offerContract.ownerOf(tokenId)).toEqual(users[0].address);

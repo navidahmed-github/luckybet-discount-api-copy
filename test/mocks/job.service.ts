@@ -1,4 +1,3 @@
-import { awaitSeconds } from "../../src/common.types";
 import { IJobService } from "../../src/modules/job/job.types";
 
 export class MockJobService implements IJobService {

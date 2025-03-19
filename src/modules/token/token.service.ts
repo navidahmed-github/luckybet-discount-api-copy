@@ -201,7 +201,6 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
             await this._jobService.run(AIRDROP_JOB_NAME, requestId);
             return requestId;
         } catch (err) {
-            // !! test this
             // operation has failed therefore make best attempt to delete all chunks
             await this._airdropRepository.delete({ requestId }).catch(_ => this._logger.error(`Deleting airdrop records failed for request: ${requestId}`));
             throw new AirdropCannotCreateError(err.message);

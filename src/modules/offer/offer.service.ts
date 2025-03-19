@@ -4,7 +4,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { MongoRepository } from "typeorm";
 import { Contract, EventLog, id, TransactionReceipt, ZeroAddress } from "ethers";
 import { ProviderTokens } from "../../providerTokens";
-import { callContract, formatTokenId, getTokenId, IDestination, ISource, MimeType, parseDestination, splitTokenId, toAdminString, toNumberSafe } from "../../common.types";
+import { callContract, formatTokenId, fromTokenNative, getTokenId, IDestination, ISource, MimeType, parseDestination, splitTokenId, toAdminString, toNumberSafe } from "../../common.types";
 import { InsufficientBalanceError, NotApprovedError, OfferTokenIdError } from "../../error.types";
 import { RawTransfer } from "../../entities/transfer.entity";
 import { User } from "../../entities/user.entity";
@@ -68,7 +68,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
                 offerType: t._id,
                 totalMints: t.totalMints,
                 totalBurns: t.totalBurns,
-                ...(template?.metadata?.name && { offerName: template.metadata.name })                
+                ...(template?.metadata?.name && { offerName: template.metadata.name })
             };
         }));
         return { ...transferSummary, totalSupply, totalOfferTypes, topOfferTypes };
@@ -98,8 +98,14 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
                 'offer.offerInstance': offerInstance
             }
         });
+        const amount = mint?.offer?.amount;
         const additionalInfo = mint?.offer?.additionalInfo;
-        return { ...metadata, usesDefault: !overriden, ...(additionalInfo && { additionalInfo }) };
+        return {
+            ...metadata,
+            usesDefault: !overriden,
+            ...(amount && { amount: fromTokenNative(BigInt(amount)) }),
+            ...(additionalInfo && { additionalInfo })
+        };
     }
 
     public async getImage(offerType: number, offerInstance: number): Promise<OfferImage> {
@@ -127,8 +133,9 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         return super.getHistory(dest, "offer", async t => {
             const [template] = await this.getWithFallback(this._templateRepository, t.offer.offerType, t.offer.offerInstance);
             const tokenId = formatTokenId(getTokenId(t.offer.offerType, t.offer.offerInstance));
+            const amount = t.offer.amount ? { amount: fromTokenNative(BigInt(t.offer.amount)) } : {};
             const additionalInfo = t.offer.additionalInfo ? { additionalInfo: t.offer.additionalInfo } : {};
-            return { tokenId, ...additionalInfo, ...(template?.metadata?.name && { offerName: template.metadata.name }) };
+            return { tokenId, ...amount, ...additionalInfo, ...(template?.metadata?.name && { offerName: template.metadata.name }) };
         });
     }
 
@@ -172,7 +179,8 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
                 throw new OfferTokenIdError("Failed to read token identifier from event");
             }
             this._logger.verbose(`Minted offer: ${formatTokenId(tokenId)}`);
-            const rawTransfer = await this.saveTransfer(ZeroAddress, toAddress, tokenId, txOfferReceipt.blockNumber, txOfferReceipt.hash, additionalInfo);
+            const rawTransfer = await this.saveTransfer(
+                ZeroAddress, toAddress, tokenId, txOfferReceipt.blockNumber, txOfferReceipt.hash, amount.toString(), additionalInfo);
             return this.addTokenId(rawTransfer, tokenId);
         });
     }
@@ -298,7 +306,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
 
     protected addTransferData(transfer: Omit<RawTransfer, "token" | "offer">, value: bigint, args: any[]): RawTransfer {
         const offerId = splitTokenId(value);
-        const offer = Object.assign(offerId, args[0] && { additionalInfo: args[0] });
+        const offer = Object.assign(offerId, args[0] && { amount: args[0] }, args[1] && { additionalInfo: args[1] });
         return { ...transfer, offer };
     }
 

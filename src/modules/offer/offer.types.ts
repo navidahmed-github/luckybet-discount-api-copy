@@ -156,6 +156,12 @@ export class OfferHistoryDTO extends TransferHistoryDTO {
     offerName?: string;
 
     @ApiPropertyOptional({
+        description: "Amount of discount tokens spent on offer",
+        type: Number,
+    })
+    amount?: number;
+
+    @ApiPropertyOptional({
         description: "Additional information related to transaction",
         type: String,
     })
