@@ -302,8 +302,8 @@ export class OfferController {
     }
 
     private parseTokenId(tokenId: string): [number, number] {
-        const offerType = Number.parseInt(tokenId.slice(0, 32));
-        const offerInstance = Number.parseInt(tokenId.slice(32, 64));
+        const offerType = Number.parseInt(tokenId.slice(0, 32), 16);
+        const offerInstance = Number.parseInt(tokenId.slice(32, 64), 16);
         if (!Number.isNaN(offerType) && !Number.isNaN(offerInstance)) {
             return [offerType, offerInstance];
         }
