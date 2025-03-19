@@ -160,6 +160,21 @@ export class StakeWithdrawError extends StakeError {
 	}
 }
 
+//=== Contract errors
+export class ContractError extends Error {
+	constructor(msg: string) {
+		super(msg);
+		this.name = ContractError.name;
+	}
+}
+
+export class ContractNonceError extends ContractError {
+	constructor(msg: string) {
+		super(msg);
+		this.name = ContractNonceError.name;
+	}
+}
+
 //=== Miscellaneous errors
 export class DestinationInvalidError extends Error {
 	constructor(msg: string) {
@@ -179,12 +194,5 @@ export class NotApprovedError extends Error {
 	constructor(msg: string) {
 		super(msg);
 		this.name = NotApprovedError.name;
-	}
-}
-
-export class ContractError extends Error {
-	constructor(msg: string) {
-		super(msg);
-		this.name = ContractError.name;
 	}
 }

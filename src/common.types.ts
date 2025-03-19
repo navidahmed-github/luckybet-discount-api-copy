@@ -1,6 +1,6 @@
 import { ApiProperty, ApiQuery } from "@nestjs/swagger";
 import { Contract, isAddress, Wallet } from "ethers";
-import { ContractError, DestinationInvalidError } from "./error.types";
+import { ContractError, ContractNonceError, DestinationInvalidError } from "./error.types";
 import { IUserService } from "./modules/user/user.types";
 
 export enum OperationStatus {
@@ -202,6 +202,9 @@ export async function callContract<T>(action: () => Promise<T>, contract: Contra
         const customError = extractCustomSolidityError(err, contract.interface);
         if (customError) {
             throw new ContractError(customError);
+        }
+        if (err?.code === "NONCE_EXPIRED") {
+            throw new ContractNonceError(err?.info?.error?.message);
         }
         throw err;
     }

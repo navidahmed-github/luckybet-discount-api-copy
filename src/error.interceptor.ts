@@ -1,6 +1,7 @@
 import {
     BadRequestException,
     CallHandler,
+    ConflictException,
     ExecutionContext,
     HttpException,
     HttpStatus,
@@ -11,7 +12,7 @@ import {
     NotFoundException
 } from "@nestjs/common";
 import { catchError, Observable } from "rxjs";
-import { DestinationInvalidError, EntityAlreadyExistsError, EntityMissingIdError, EntityNotFoundError, InsufficientBalanceError, NotApprovedError, StakeWithdrawError } from "./error.types";
+import { ContractNonceError, DestinationInvalidError, EntityAlreadyExistsError, EntityMissingIdError, EntityNotFoundError, InsufficientBalanceError, NotApprovedError, StakeWithdrawError } from "./error.types";
 
 @Injectable()
 export class ErrorInterceptor implements NestInterceptor {
@@ -26,6 +27,10 @@ export class ErrorInterceptor implements NestInterceptor {
                 if (err instanceof EntityNotFoundError) {
                     throw new NotFoundException(errorData, err.message);
                 }
+                if (err instanceof ContractNonceError) {
+                    // nonce error almost always indicates attempting multiple operations at once with the same wallet
+                    throw new ConflictException(errorData, err.message);
+                }
                 if ((err instanceof EntityMissingIdError) ||
                     (err instanceof EntityAlreadyExistsError) ||
                     (err instanceof StakeWithdrawError) ||
@@ -35,7 +40,7 @@ export class ErrorInterceptor implements NestInterceptor {
                     throw new BadRequestException(errorData, err.message);
                 }
                 if (err.message?.toLowerCase().includes("bad request")) {
-                    // Output the details of the bad request, which is usually an array in the "response.message"
+                    // output the details of the bad request, which is usually an array in the "response.message"
                     throw new HttpException({ name: err.name, data: err?.response?.message ?? [err.message] }, HttpStatus.BAD_REQUEST);
                 }
                 throw new InternalServerErrorException(errorData);
