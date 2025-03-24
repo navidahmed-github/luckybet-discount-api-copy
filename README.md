@@ -39,6 +39,7 @@ This is a summary of the environment variables:
 | TOKEN_CONTRACT_ADDRESS         | Y         | N      | Deployed address of token contract |
 | OFFER_CONTRACT_ADDRESS         | Y         | N      | Deployed address of offer contract |
 | ENABLE_SWAGGER                 | Y         | N      | Indicates whether swagger documentation will be available |
+| EVENT_FILTER_SIZE              | N         | N      | Specifies number of previous blocks to attempt to read event history from on startup |
 | AIRDROP_CHUNK_SIZE             | N         | N      | Specifies how many addresses are minted to per block when performing airdrops |
 | ATTRIBUTE_NAME_MAPPING         | N         |N       | Allow the 'name' field for an attribute to be renamed when retrieving metadata <br/> This is potentially useful if wanting to map to OpenSea standard so set to 'trait_type' for example |
 | ATTRIBUTE_OTHER_MAPPING        | N         | N      | Allow the 'other' field for an attribute to renamed when retrieving metadata <br/> This will nearly always be mapped to some type field such as 'display_type'
@@ -86,9 +87,9 @@ To run the **unit** tests:
 
 It is recommended that the API be deployed on Google Cloud using Cloud Run which is a serverless compute service (like AWS lambda). However, there is one caveat and that is that this service must be able to support background processing (ie. allow some CPU at all times) and be configured to do so as the API contains a job scheduling service used for airdrops - GCP supports this but AWS does not. 
 
-A `cloudbuid.yaml` has been provided that should be sufficient for use on GCP. In order to upload an image execute the following:
+A `cloudbuid.yaml` has been provided that should be sufficient for use on GCP. In order to upload an image execute the following inside a shell:
 
-> gcloud builds submit
+> ./upload-gcp.sh
 
 **It is strongly recommended that the following also be implemented:**
 - Cloudflare or some other equivalent be used in front of this service to mitigate against DDoS. 

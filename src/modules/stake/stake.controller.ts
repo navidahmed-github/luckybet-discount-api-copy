@@ -31,7 +31,12 @@ export class StakeController {
     @ApiOperation({ summary: "Get history for user" })
     @ApiQueryUserId("Identifier of user for which to return history (admin role only)")
     @ApiQueryAddress("Address for which to return history (admin role only)")
-    @ApiOkResponse({ description: "The history was returned successfully" })
+    @ApiOkResponse({
+        description: "The history was returned successfully",
+        type: StakeHistoryDTO,
+        isArray: true
+    })
+    @ApiNotFoundResponse({ description: "User could not be found" })
     async history(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<StakeHistoryDTO[]> {
         const dest = req.user.role === Role.Admin ? { userId, address } : { userId: req.user.id };
         return this._stakeService.getHistory(dest);
@@ -68,7 +73,7 @@ export class StakeController {
         description: "Staking contract was added successfully",
         type: StakeContractDTO,
     })
-    @ApiBadRequestResponse({ description: "Missing information or contract already exists" })
+    @ApiBadRequestResponse({ description: "Address is missing or contract already exists" })
     @ApiInternalServerErrorResponse({ description: "Contract could not be saved" })
     @HttpCode(HttpStatus.CREATED)
     async add(@Param("address") address: string): Promise<StakeContractDTO> {
@@ -84,7 +89,11 @@ export class StakeController {
         required: true,
         type: String,
     })
-    @ApiOkResponse({ description: "Stake was added successfully" })
+    @ApiOkResponse({
+        description: "Stake was added successfully",
+        type: StakeStatusDTO
+    })
+    @ApiBadRequestResponse({ description: "Address is missing or contract does not exist" })
     async status(@Request() req, @Param("address") address: string): Promise<StakeStatusDTO> {
         return this._stakeService.getStatus(address, req.user.id);
     }
@@ -99,6 +108,8 @@ export class StakeController {
         type: String,
     })
     @ApiOkResponse({ description: "Deposit was successful" })
+    @ApiBadRequestResponse({ description: "Contract does not exist or insufficient balance" })
+    @ApiInternalServerErrorResponse({ description: "Failed to deposit" })
     async deposit(@Request() req, @Body() cmd: DepositStakeCommand, @Param("address") address: string): Promise<void> {
         await this._stakeService.deposit(address, req.user.id, toTokenNative(cmd.amount));
     }
@@ -116,6 +127,8 @@ export class StakeController {
         description: "Withdraw was successful",
         type: StakeWithdrawDTO
     })
+    @ApiBadRequestResponse({ description: "Contract does not exist or no unlocked stake" })
+    @ApiInternalServerErrorResponse({ description: "Failed to withdraw" })
     async withdraw(@Request() req, @Param("address") address: string): Promise<StakeWithdrawDTO> {
         const stake = await this._stakeService.withdraw(address, req.user.id);
         return { staked: fromTokenNative(BigInt(stake.stakedAmount)), reward: fromTokenNative(BigInt(stake.withdraw.rewardAmount)) };

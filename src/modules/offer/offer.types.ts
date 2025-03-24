@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsArray, IsNotEmpty, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 import { DestinationDTO, IDestination, ISource, MimeType, TransferHistoryDTO, TransferSummaryDTO } from "../../common.types";
-import { RawTransfer } from "../../entities/transfer.entity";
+import { RawTransferWithTokenId } from "../../entities/transfer.entity";
 import { Metadata, Template } from "../../entities/template.entity";
 import { OfferImage } from "../../entities/image.entity";
 
@@ -168,6 +168,50 @@ export class OfferHistoryDTO extends TransferHistoryDTO {
     additionalInfo?: string;
 }
 
+export class OfferTransferDTO {
+    @ApiProperty({
+        description: "Address from which offer transferred",
+        type: String,
+    })
+    fromAddress: string;
+
+    @ApiProperty({
+        description: "Address to which offer transferred",
+        type: String,
+    })
+    toAddress: string;
+
+    @ApiProperty({
+        description: "Block number associated with transfer",
+        type: String,
+    })
+    blockNumber: number;
+
+    @ApiProperty({
+        description: "Transaction hash associated with transfer",
+        type: String,
+    })
+    txHash: string;
+
+    @ApiProperty({
+        description: "Token identifier of offer",
+        type: String,
+    })
+    tokenId: string;
+
+    @ApiPropertyOptional({
+        description: "Amount of discount tokens spent on offer",
+        type: Number,
+    })
+    amount?: number;
+
+    @ApiPropertyOptional({
+        description: "Additional information related to transaction",
+        type: String,
+    })
+    additionalInfo?: string;
+}
+
 export class AttributeDTO {
     @IsNotEmpty()
     @ApiProperty({
@@ -246,9 +290,9 @@ export interface IOfferService {
     getImage(offerType: number, offerInstance: number): Promise<OfferImage>;
     getOffers(dest: IDestination, shortId?: boolean): Promise<OfferDTO[]>;
     getHistory(dest: IDestination): Promise<OfferHistoryDTO[]>;
-    create(to: IDestination, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransfer>;
-    activate(userId: string, tokenId: bigint): Promise<RawTransfer>;
-    transfer(from: ISource, to: IDestination, tokenId: bigint): Promise<RawTransfer>;
+    create(to: IDestination, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransferWithTokenId>;
+    activate(userId: string, tokenId: bigint): Promise<RawTransferWithTokenId>;
+    transfer(from: ISource, to: IDestination, tokenId: bigint): Promise<RawTransferWithTokenId>;
     getTemplates(): Promise<Template[]>;
     getNextOfferType(partner: string): Promise<number>;
     createTemplate(offerType: number, metadata: Metadata, offerInstance?: number): Promise<void>;

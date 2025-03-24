@@ -11,6 +11,13 @@ import { User } from "../entities/user.entity";
 import { IContractService } from "../services/contract.service";
 import { IProviderService } from "../services/ethereumProvider.service";
 import { IUserService } from "../modules/user/user.types";
+import { ConfigService } from "@nestjs/config";
+
+export const EVENT_FILTER_DEFAULT_SIZE = 10000;
+
+export enum TransferServiceSettingKeys {
+    EVENT_FILTER_SIZE = "EVENT_FILTER_SIZE",
+}
 
 export class TransferService<T extends TransferHistoryDTO> implements OnModuleInit, OnModuleDestroy {
     protected readonly _provider: JsonRpcApiProvider;
@@ -29,6 +36,7 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
 
     constructor(
         protected readonly _logger: Logger,
+        protected readonly _config: ConfigService,
         ethereumProviderService: IProviderService,
         userRepository: MongoRepository<User>
     ) {
@@ -44,7 +52,8 @@ export class TransferService<T extends TransferHistoryDTO> implements OnModuleIn
         this._disableListener = false;
         this._event = await this.getContract();
         const currentBlock = await this._provider.getBlockNumber();
-        const evts = await this._event.queryFilter("Transfer", Math.max(currentBlock - 10000, 0), currentBlock);
+        const filterSize = Number(this._config.get(TransferServiceSettingKeys.EVENT_FILTER_SIZE) ?? EVENT_FILTER_DEFAULT_SIZE);
+        const evts = await this._event.queryFilter("Transfer", Math.max(currentBlock - filterSize, 0), currentBlock);
         Promise.allSettled(evts.filter(evt => "args" in evt).map(async (evt) =>
             this.saveTransfer(evt.args[0], evt.args[1], evt.args[2], evt.blockNumber, evt.transactionHash)));
         this._event.on("Transfer", this.transferListener);

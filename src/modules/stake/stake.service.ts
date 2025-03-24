@@ -10,6 +10,7 @@ import { InsufficientBalanceError, MONGO_DUPLICATE_KEY, StakeAlreadyExistsError,
 import { IUserService } from "../user/user.types";
 import { DepositStake, RawStake, Stake, WithdrawStake } from "../../entities/stake.entity";
 import { DeployedContract } from "../../entities/contract.entity";
+import { EVENT_FILTER_DEFAULT_SIZE, TransferServiceSettingKeys } from "../../services/transfer.service";
 import { ContractServiceSettingKeys, IContractService } from "../../services/contract.service";
 import { IWalletService } from "../../services/wallet.service";
 import { IProviderService } from "../../services/ethereumProvider.service";
@@ -27,7 +28,7 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
     private _events: Contract[];
 
     constructor(
-        private config: ConfigService,
+        private readonly _config: ConfigService,
 
         @Inject(ProviderTokens.UserService)
         private readonly _userService: IUserService,
@@ -48,14 +49,17 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
         private readonly _contractRepository: MongoRepository<DeployedContract>
     ) {
         this._provider = ethereumProviderService.getProvider();
-        this._tokenAddress = this.config.get(ContractServiceSettingKeys.TOKEN_CONTRACT_ADDRESS);
+        this._tokenAddress = this._config.get(ContractServiceSettingKeys.TOKEN_CONTRACT_ADDRESS);
     }
 
     public async onModuleInit() {
         this._disableListener = false;
         const currentBlock = await this._provider.getBlockNumber();
         const contracts = await this.getAll();
-        this._events = await Promise.all(contracts.map(async c => this.initialiseContract(c.address, currentBlock)));
+        this._events = [];
+        for (const contract of contracts) {
+            this._events.push(await this.initialiseContract(contract.address, currentBlock))
+        }
     }
 
     public async onModuleDestroy() {
@@ -221,10 +225,11 @@ export class StakeService implements IStakeService, OnModuleInit, OnModuleDestro
 
     private async initialiseContract(address: string, currentBlock: number): Promise<Contract> {
         const event = await this._contractService.stakeContract(address);
-        const depositEvts = await event.queryFilter("Staked", Math.max(currentBlock - 10000, 0), currentBlock);
+        const filterSize = Number(this._config.get(TransferServiceSettingKeys.EVENT_FILTER_SIZE) ?? EVENT_FILTER_DEFAULT_SIZE);
+        const depositEvts = await event.queryFilter("Staked", Math.max(currentBlock - filterSize, 0), currentBlock);
         Promise.allSettled(depositEvts.filter(evt => "args" in evt).map(async (evt) =>
             this.saveStake(address, evt.args[0], evt.args[3], evt.blockNumber, evt.transactionHash, { unlockTime: toNumberSafe(evt.args[2]) })));
-        const withdrawEvts = await event.queryFilter("Withdrawn", Math.max(currentBlock - 10000, 0), currentBlock);
+        const withdrawEvts = await event.queryFilter("Withdrawn", Math.max(currentBlock - filterSize, 0), currentBlock);
         Promise.allSettled(withdrawEvts.filter(evt => "args" in evt).map(async (evt) =>
             this.saveStake(address, evt.args[0], evt.args[1], evt.blockNumber, evt.transactionHash, { rewardAmount: evt.args[2].toString() })));
         event.on("Staked", this.depositListener(address));

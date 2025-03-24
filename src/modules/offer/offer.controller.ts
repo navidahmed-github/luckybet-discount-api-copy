@@ -1,15 +1,15 @@
 import { Body, Controller, Delete, ForbiddenException, Get, Header, HttpCode, HttpStatus, Inject, Param, ParseBoolPipe, ParseIntPipe, Post, Put, Query, Request, Res, StreamableFile, UnsupportedMediaTypeException, UploadedFile, UseInterceptors } from "@nestjs/common";
-import { ApiBearerAuth, ApiForbiddenResponse, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiUnsupportedMediaTypeResponse } from "@nestjs/swagger";
+import { ApiBadRequestResponse, ApiBearerAuth, ApiForbiddenResponse, ApiInternalServerErrorResponse, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiUnsupportedMediaTypeResponse } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { createReadStream } from "fs";
 import { ProviderTokens } from "../../providerTokens";
-import { ApiQueryAddress, ApiQueryUserId, MimeType, toTokenNative } from "../../common.types";
+import { ApiQueryAddress, ApiQueryUserId, fromTokenNative, MimeType, toTokenNative } from "../../common.types";
 import { OfferNotFoundError, OfferTokenIdError, UserMissingIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
-import { RawTransfer } from "../../entities/transfer.entity";
+import { RawTransferWithTokenId } from "../../entities/transfer.entity";
 import { Template } from "../../entities/template.entity";
-import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails, OfferDTO, ImageDTO, TransformedMetadata, NextOfferDTO, OfferSummaryDTO } from "./offer.types";
+import { CreateTemplateCommand, CreateOfferCommand, IOfferService, OfferHistoryDTO, TransferOfferCommand, TemplateDTO, MetadataDetails, OfferDTO, ImageDTO, TransformedMetadata, NextOfferDTO, OfferSummaryDTO, OfferTransferDTO } from "./offer.types";
 
 const DEFAULT_IMAGE_NAME = "LuckyBetOffer.png";
 const DEFAULT_IMAGE_TYPE = MimeType.PNG;
@@ -59,11 +59,19 @@ export class OfferController {
     @ApiOperation({ summary: "Get offers owned for user" })
     @ApiQueryUserId("Identifier of user for which to return offers (admin role only)")
     @ApiQueryAddress("Address for which to return offers (admin role only)")
+    @ApiQuery({
+        name: "shortId",
+        description: "Indicates whether to remove zero padding",
+        required: false,
+        type: Boolean,
+    })
     @ApiOkResponse({
         description: "Offers were returned successfully",
         type: OfferDTO,
         isArray: true
     })
+    @ApiNotFoundResponse({ description: "User could not be found" })
+    @ApiInternalServerErrorResponse({ description: "Failed to read contract" })
     async owned(
         @Request() req,
         @Query("userId") userId?: string,
@@ -82,7 +90,9 @@ export class OfferController {
     @ApiOkResponse({
         description: "History was returned successfully",
         type: OfferHistoryDTO,
+        isArray: true
     })
+    @ApiNotFoundResponse({ description: "User could not be found" })
     async history(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<OfferHistoryDTO[]> {
         const dest = req.user.role === Role.Admin ? { userId, address } : { userId: req.user.id };
         return this._offerService.getHistory(dest);
@@ -92,29 +102,39 @@ export class OfferController {
     @Roles(Role.Admin, Role.Partner)
     @ApiOperation({ summary: "Create an offer" })
     @ApiParamOfferType()
-    @ApiOkResponse({ description: "The offer was created successfully" })
+    @ApiOkResponse({
+        description: "The offer was created successfully",
+        type: OfferTransferDTO
+    })
+    @ApiBadRequestResponse({ description: "Invalid destination format" })
+    @ApiInternalServerErrorResponse({ description: "Failed to create offer type" })
     @ApiForbiddenResponse({ description: "Partner does not own this offer type" })
     async create(
         @Request() req,
         @Body() cmd: CreateOfferCommand,
         @Param("offerType", new ParseIntPipe()) offerType: number,
-    ): Promise<RawTransfer> {
+    ): Promise<OfferTransferDTO> {
         await this.checkPartnerPermission(offerType, req);
-        return this._offerService.create(cmd.to, offerType, toTokenNative(cmd.amount), cmd.additionalInfo);
+        return this.toTransferDTO(await this._offerService.create(cmd.to, offerType, toTokenNative(cmd.amount), cmd.additionalInfo));
     }
 
     @Post(":tokenId/transfer")
     @Roles(Role.Admin, Role.User)
     @ApiOperation({ summary: "Transfer offers to another user" })
     @ApiParamTokenId("Identifier of offer to transfer")
-    @ApiOkResponse({ description: "The offer was transferred successfully" })
-    async transfer(@Request() req, @Body() cmd: TransferOfferCommand, @Param("tokenId") tokenId: string): Promise<RawTransfer> {
+    @ApiOkResponse({
+        description: "The offer was transferred successfully",
+        type: OfferTransferDTO
+    })
+    @ApiBadRequestResponse({ description: "Invalid destination format or not owner" })
+    @ApiInternalServerErrorResponse({ description: "Failed to transfer offer" })
+    async transfer(@Request() req, @Body() cmd: TransferOfferCommand, @Param("tokenId") tokenId: string): Promise<OfferTransferDTO> {
         const asAdmin = req.user.role === Role.Admin ? req.user.id : undefined;
         const userId = asAdmin ? cmd.fromUserId : req.user.id;
         if (!userId) {
             throw new UserMissingIdError();
         }
-        return this._offerService.transfer({ userId, asAdmin }, cmd.to, BigInt(tokenId));
+        return this.toTransferDTO(await this._offerService.transfer({ userId, asAdmin }, cmd.to, BigInt(tokenId)));
     }
 
     @Post(":tokenId/activate")
@@ -122,8 +142,10 @@ export class OfferController {
     @ApiOperation({ summary: "Mark offer as activated" })
     @ApiParamTokenId("Identifier of offer to activate")
     @ApiOkResponse({ description: "The offer was activated successfully" })
-    async activate(@Request() req, @Param("tokenId") tokenId: string): Promise<RawTransfer> {
-        return this._offerService.activate(req.user.id, BigInt(tokenId));
+    @ApiBadRequestResponse({ description: "Not owner" })
+    @ApiInternalServerErrorResponse({ description: "Failed to activate offer" })
+    async activate(@Request() req, @Param("tokenId") tokenId: string): Promise<void> {
+        await this._offerService.activate(req.user.id, BigInt(tokenId));
     }
 
     @Get("template")
@@ -157,6 +179,7 @@ export class OfferController {
     @ApiParamOfferInstance()
     @ApiOkResponse({ description: "The template was created/updated successfully" })
     @ApiForbiddenResponse({ description: "Partner does not own this offer type" })
+    @ApiInternalServerErrorResponse({ description: "Failed to create/update template" })
     async createTemplate(
         @Request() req,
         @Body() cmd: CreateTemplateCommand,
@@ -174,6 +197,7 @@ export class OfferController {
     @ApiParamOfferInstance()
     @ApiNoContentResponse({ description: "The template was deleted successfully" })
     @ApiForbiddenResponse({ description: "Partner does not own this offer type" })
+    @ApiInternalServerErrorResponse({ description: "Failed to delete template" })
     @HttpCode(HttpStatus.NO_CONTENT)
     async deleteTemplate(
         @Request() req,
@@ -210,6 +234,7 @@ export class OfferController {
     @ApiOkResponse({ description: "The image was added/updated successfully" })
     @ApiForbiddenResponse({ description: "Partner does not own this offer type" })
     @ApiUnsupportedMediaTypeResponse({ description: "The image type is not supported" })
+    @ApiInternalServerErrorResponse({ description: "Failed to add/update image" })
     @UseInterceptors(FileInterceptor('image'))
     async uploadImage(
         @Request() req,
@@ -232,6 +257,7 @@ export class OfferController {
     @ApiParamOfferInstance()
     @ApiNoContentResponse({ description: "The image was deleted successfully" })
     @ApiForbiddenResponse({ description: "Partner does not own this offer type" })
+    @ApiInternalServerErrorResponse({ description: "Failed to delete image" })
     @HttpCode(HttpStatus.NO_CONTENT)
     async deleteImage(
         @Request() req,
@@ -252,7 +278,9 @@ export class OfferController {
         required: false,
         type: Boolean
     })
-    @ApiOkResponse({ description: "The metadata was returned successfully" })
+    @ApiOkResponse({ description: "Metadata was returned successfully" })
+    @ApiNotFoundResponse({ description: "Metadata does not exist" })
+    @ApiBadRequestResponse({ description: "Invalid format for token identifier" })
     async metadata(
         @Param("tokenId") tokenId: string,
         @Query("detailed", new ParseBoolPipe({ optional: true })) detailed?: boolean
@@ -274,6 +302,8 @@ export class OfferController {
     @ApiOperation({ summary: "Get image associated with token identifier" })
     @ApiParamTokenId("Identifier of offer for which to return image")
     @ApiOkResponse({ description: "The image was returned successfully" })
+    @ApiNotFoundResponse({ description: "Image does not exist" })
+    @ApiBadRequestResponse({ description: "Invalid format for token identifier" })
     @Header('Content-Disposition', 'inline')
     async img(@Param("tokenId") tokenId: string, @Res({ passthrough: true }) res): Promise<StreamableFile> {
         if (tokenId === DEFAULT_IMAGE_NAME) {
@@ -336,5 +366,10 @@ export class OfferController {
             description: template.metadata.description,
             attributes: template.metadata.attributes
         };
+    }
+
+    private toTransferDTO(transfer: RawTransferWithTokenId): OfferTransferDTO {
+        const { offer, ...rest } = transfer;
+        return { ...rest, ...offer, ...(offer.amount && { amount: fromTokenNative(BigInt(offer.amount)) }) };
     }
 }

@@ -5,6 +5,7 @@ import { ApiQueryAddress, ApiQueryUserId, fromTokenNative, toTokenNative } from 
 import { UserMissingIdError } from "../../error.types";
 import { Roles } from "../../auth/roles.decorator";
 import { Role } from "../../auth/roles.types";
+import { RawTransfer } from "../../entities/transfer.entity";
 import { TokenHistoryDTO, ITokenService, TransferTokenCommand, TokenBalanceDTO, TokenTransferDTO, AirdropCommand, AirdropResponseDTO, AirdropStatusDTO, CreateTokenCommand, TokenSummaryDTO, AirdropDTO } from "./token.types";
 
 @Controller("tokens")
@@ -36,7 +37,7 @@ export class TokenController {
         type: TokenBalanceDTO,
     })
     @ApiNotFoundResponse({ description: "User could not be found" })
-    @ApiInternalServerErrorResponse({ description: "Wallet mismatch" })
+    @ApiInternalServerErrorResponse({ description: "Failed to read contract" })
     async balance(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<TokenBalanceDTO> {
         const dest = req.user.role === Role.Admin ? { userId, address } : { userId: req.user.id };
         const balance = await this._tokenService.getBalance(dest);
@@ -51,6 +52,7 @@ export class TokenController {
     @ApiOkResponse({
         description: "History was returned successfully",
         type: TokenHistoryDTO,
+        isArray: true
     })
     @ApiNotFoundResponse({ description: "User could not be found" })
     async history(@Request() req, @Query("userId") userId?: string, @Query("address") address?: string): Promise<TokenHistoryDTO[]> {
@@ -65,11 +67,11 @@ export class TokenController {
         description: "Tokens were minted successfully",
         type: TokenTransferDTO,
     })
+    @ApiBadRequestResponse({ description: "Invalid destination format" })
     @ApiInternalServerErrorResponse({ description: "Failed to mint tokens" })
     @HttpCode(HttpStatus.CREATED)
     async create(@Body() cmd: CreateTokenCommand): Promise<TokenTransferDTO> {
-        const rawTransfer = await this._tokenService.create(cmd.to, toTokenNative(cmd.amount));
-        return { ...rawTransfer, amount: fromTokenNative(BigInt(rawTransfer.token.amount)) }
+        return this.toTransferDTO(await this._tokenService.create(cmd.to, toTokenNative(cmd.amount)));
     }
 
     @Delete(":amount")
@@ -95,7 +97,7 @@ export class TokenController {
         description: "Tokens were transferred successfully",
         type: TokenTransferDTO,
     })
-    @ApiBadRequestResponse({ description: "Invalid destination format" })
+    @ApiBadRequestResponse({ description: "Invalid destination format or not owner or insufficient balance" })
     @ApiInternalServerErrorResponse({ description: "Failed to transfer tokens" })
     async transfer(@Request() req, @Body() cmd: TransferTokenCommand): Promise<TokenTransferDTO> {
         const asAdmin = req.user.role === Role.Admin ? req.user.id : undefined;
@@ -103,14 +105,17 @@ export class TokenController {
         if (!userId) {
             throw new UserMissingIdError();
         }
-        const rawTransfer = await this._tokenService.transfer({ userId, asAdmin }, cmd.to, toTokenNative(cmd.amount));
-        return { ...rawTransfer, amount: fromTokenNative(BigInt(rawTransfer.token.amount)) };
+        return this.toTransferDTO(await this._tokenService.transfer({ userId, asAdmin }, cmd.to, toTokenNative(cmd.amount)));
     }
 
     @Get("airdrop")
     @Roles(Role.Admin)
     @ApiOperation({ summary: "Get all airdrops" })
-    @ApiOkResponse({ description: "Airdrops were returned successfully" })
+    @ApiOkResponse({
+        description: "Airdrops were returned successfully",
+        type: AirdropDTO,
+        isArray: true
+    })
     async allAirdrops(): Promise<AirdropDTO[]> {
         return this._tokenService.airdropGetAll();
     }
@@ -118,7 +123,12 @@ export class TokenController {
     @Post("airdrop")
     @Roles(Role.Admin)
     @ApiOperation({ summary: "Mint tokens to multiple destinations" })
-    @ApiOkResponse({ description: "The minting request was submitted successfully" })
+    @ApiOkResponse({
+        description: "The minting request was submitted successfully",
+        type: AirdropResponseDTO
+    })
+    @ApiBadRequestResponse({ description: "Invalid destination format" })
+    @ApiInternalServerErrorResponse({ description: "Failed to register airdrop" })
     @HttpCode(HttpStatus.ACCEPTED)
     async airdrop(@Body() cmd: AirdropCommand): Promise<AirdropResponseDTO> {
         const requestId = await this._tokenService.airdrop(cmd.destinations, toTokenNative(cmd.amount));
@@ -134,8 +144,16 @@ export class TokenController {
         required: true,
         type: String,
     })
-    @ApiOkResponse({ description: "The status was successfully returned" })
+    @ApiOkResponse({
+        description: "The status was successfully returned",
+        type: AirdropStatusDTO
+    })
     async airdropStatus(@Param("requestId") requestId: string): Promise<AirdropStatusDTO> {
         return await this._tokenService.airdropStatus(requestId);
+    }
+
+    private toTransferDTO(transfer: RawTransfer): TokenTransferDTO {
+        const { token, ...rest } = transfer;
+        return { ...rest, amount: fromTokenNative(BigInt(token.amount)) };
     }
 }

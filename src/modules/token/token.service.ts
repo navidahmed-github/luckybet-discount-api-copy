@@ -27,7 +27,7 @@ export enum TokenServiceSettingKeys {
 @Injectable()
 export class TokenService extends TransferService<TokenHistoryDTO> implements ITokenService, OnApplicationBootstrap {
     constructor(
-        private readonly _config: ConfigService,
+        config: ConfigService,
 
         @Inject(ProviderTokens.JobService)
         private readonly _jobService: IJobService,
@@ -44,7 +44,7 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         @InjectRepository(AirdropChunk)
         private readonly _airdropRepository: MongoRepository<AirdropChunk>
     ) {
-        super(new Logger(TokenService.name), ethereumProviderService, userRepository);
+        super(new Logger(TokenService.name), config, ethereumProviderService, userRepository);
     }
 
     public async onApplicationBootstrap() {
@@ -172,10 +172,17 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
         }
 
         const users = await this._userService.getAll();
-        const addressMap = new Map(users.map(u => [u.userId, u.address]));
-        const [valid, invalid] = destinations
+        const addressMap = new Map<string, string>(users.map(u => [u.userId, u.address]));
+        const [validUsers, invalidUsers] = destinations
             .map(d => d.userId ? { ...d, address: addressMap.get(d.userId) } : d)
             .reduce(([v, i], curr) => curr.address ? [[...v, curr], i] : [v, [...i, curr]], [[], []]);
+
+        // only one transfer event can be generated per address per transaction; rather than attempting to combine
+        // events we will not allow duplicates which makes more sense
+        const duplicateMap = new Map<string, IDestination[]>();
+        validUsers.forEach(d => duplicateMap.set(d.address, [...(duplicateMap.get(d.address) ?? []), d]));
+        const [valid, duplicates] = Array.from(duplicateMap.values())
+            .reduce(([v, d], curr) => [[...v, curr[0]], curr.length == 1 ? d : [...d, curr[0]]], [[], []]);
 
         const requestId = uuid_v4();
         const chunkSize = Number(this._config.get(TokenServiceSettingKeys.AIRDROP_CHUNK_SIZE) ?? AIRDROP_DEFAULT_CHUNK_SIZE);
@@ -189,13 +196,22 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
                     destinations: chunkAddresses
                 });
             }
-            if (invalid.length) {
+            if (invalidUsers.length) {
                 this._airdropRepository.save({
                     requestId,
                     status: OperationStatus.Error,
                     error: "User not found",
                     amount: amount.toString(),
-                    destinations: invalid
+                    destinations: invalidUsers
+                });
+            }
+            if (duplicates.length) {
+                this._airdropRepository.save({
+                    requestId,
+                    status: OperationStatus.Error,
+                    error: "Duplicate address",
+                    amount: amount.toString(),
+                    destinations: duplicates
                 });
             }
             await this._jobService.run(AIRDROP_JOB_NAME, requestId);
@@ -261,9 +277,14 @@ export class TokenService extends TransferService<TokenHistoryDTO> implements IT
                 await touch();
                 await this._walletService.gasWallet(adminWallet);
                 await this._airdropRepository.update(pending.id, { status: OperationStatus.Processing });
-                const tx = await callContract(() => token.mintMany(pending.destinations.map(d => d.address), BigInt(pending.amount)), token);
-                await this._airdropRepository.update(pending.id, { txHash: tx.hash });
-                await tx.wait();
+                const amount = BigInt(pending.amount);
+                const tx = await callContract(() => token.mintMany(pending.destinations.map(d => d.address), amount), token);
+                await this.lockTransfer(async () => {
+                    await this._airdropRepository.update(pending.id, { txHash: tx.hash });
+                    const txReceipt = await tx.wait();
+                    return await Promise.allSettled(pending.destinations.map(async d =>
+                        this.saveTransfer(ZeroAddress, d.address, amount, txReceipt.blockNumber, txReceipt.hash)));
+                });
                 await this._airdropRepository.update(pending.id, { status: OperationStatus.Complete });
                 this._logger.verbose(`Processed airdrop chunk: ${pending.id}`);
                 await awaitSeconds(5);

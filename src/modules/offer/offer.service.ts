@@ -6,7 +6,7 @@ import { Contract, EventLog, id, TransactionReceipt, ZeroAddress } from "ethers"
 import { ProviderTokens } from "../../providerTokens";
 import { callContract, formatTokenId, fromTokenNative, getTokenId, IDestination, ISource, MimeType, parseDestination, splitTokenId, toAdminString, toNumberSafe } from "../../common.types";
 import { InsufficientBalanceError, NotApprovedError, OfferTokenIdError } from "../../error.types";
-import { RawTransfer } from "../../entities/transfer.entity";
+import { RawTransfer, RawTransferWithTokenId } from "../../entities/transfer.entity";
 import { User } from "../../entities/user.entity";
 import { Metadata, Template } from "../../entities/template.entity";
 import { OfferImage } from "../../entities/image.entity";
@@ -25,7 +25,7 @@ export enum OfferServiceSettingKeys {
 @Injectable()
 export class OfferService extends TransferService<OfferHistoryDTO> implements IOfferService {
     constructor(
-        private readonly config: ConfigService,
+        config: ConfigService,
 
         @Inject(ProviderTokens.WalletService)
         private readonly _walletService: IWalletService,
@@ -42,7 +42,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         @InjectRepository(OfferImage)
         private readonly _imageRepository: MongoRepository<OfferImage>,
     ) {
-        super(new Logger(OfferService.name), ethereumProviderService, userRepository);
+        super(new Logger(OfferService.name), config, ethereumProviderService, userRepository);
     }
 
     public async getSummary(): Promise<OfferSummaryDTO> {
@@ -79,8 +79,8 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         if (!template?.metadata) {
             return undefined;
         }
-        const nameMapping = this.config.get(OfferServiceSettingKeys.ATTRIBUTE_NAME_MAPPING) ?? "name";
-        const otherMapping = this.config.get(OfferServiceSettingKeys.ATTRIBUTE_OTHER_MAPPING) ?? "other";
+        const nameMapping = this._config.get(OfferServiceSettingKeys.ATTRIBUTE_NAME_MAPPING) ?? "name";
+        const otherMapping = this._config.get(OfferServiceSettingKeys.ATTRIBUTE_OTHER_MAPPING) ?? "other";
         const metadata = {
             ...template.metadata, attributes: template.metadata.attributes.map(a => ({
                 value: a.value,
@@ -139,7 +139,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         });
     }
 
-    public async create(to: IDestination, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransfer> {
+    public async create(to: IDestination, offerType: number, amount: bigint, additionalInfo?: string): Promise<RawTransferWithTokenId> {
         const [toAddress, toWallet] = await parseDestination(this._userService, to);
         this._logger.verbose(`Mint offer type: ${offerType}, to: ${toAddress}, spent: ${amount} tokens`);
         const adminWallet = this._walletService.getAdminWallet();
@@ -185,7 +185,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         });
     }
 
-    public async activate(userId: string, tokenId: bigint): Promise<RawTransfer> {
+    public async activate(userId: string, tokenId: bigint): Promise<RawTransferWithTokenId> {
         this._logger.verbose(`Activate offer: ${formatTokenId(tokenId)} for user: ${userId}`);
         const wallet = await this._userService.getUserWallet(userId);
         const offer = await this._contractService.offerContract(wallet);
@@ -204,7 +204,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         });
     }
 
-    public async transfer(from: ISource, to: IDestination, tokenId: bigint): Promise<RawTransfer> {
+    public async transfer(from: ISource, to: IDestination, tokenId: bigint): Promise<RawTransferWithTokenId> {
         const [toAddress] = await parseDestination(this._userService, to);
         this._logger.verbose(`Transfer offer: ${formatTokenId(tokenId)} from user: ${from.userId}, to: ${toAddress} ${toAdminString(from)}`);
         const wallet = await this._userService.getUserWallet(from.userId);
@@ -315,7 +315,7 @@ export class OfferService extends TransferService<OfferHistoryDTO> implements IO
         return overriden ? [overriden, true] : [await repository.findOne({ where: { offerType, offerInstance: undefined } }), false];
     }
 
-    private addTokenId(transfer: RawTransfer, tokenId: bigint): RawTransfer & { offer: { tokenId: string } } {
+    private addTokenId(transfer: RawTransfer, tokenId: bigint): RawTransferWithTokenId {
         return { ...transfer, offer: { ...transfer.offer, tokenId: formatTokenId(tokenId, true) } };
     }
 }
