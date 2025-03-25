@@ -2,7 +2,7 @@
 
 ## Summary
 
-REST API for the Lucky Bet platform built using NestJS
+REST API for the Lucky Bet platform built using NestJS and ethers.js
 
 Code was developed against node version 20.18
 
@@ -11,6 +11,7 @@ Code was developed against node version 20.18
 -   [Node.js](https://nodejs.org/en/) - Server environment
 -   [Typescript](https://www.typescriptlang.org/) - Programming language
 -   [Yarn](https://yarnpkg.com/) - Package manager
+-   [ethers.js](https://docs.ethers.org/v6/) - Library for interacting with blockchain
 -   [NestJS](https://nestjs.com/) - API framework
 -   [MongoDB](https://www.mongodb.com) - NoSQL database
 -   [Jest](https://jestjs.io/) - Testing framework
@@ -53,7 +54,6 @@ A local MongoDB instance can be run via `docker compose`
 This will create an instance which can be accessed via this connection string (given in the example configuration above)
 
 > mongodb://localhost:27018/luckybet
-
 
 ### 3. Run the service
 
